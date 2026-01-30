@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ridendine Dispatch Pro — Hamilton Demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+body{margin:0;font-family:Inter,Arial;background:#f4f6fb}
+#map{width:72%;height:100vh;float:left}
+#panel{width:28%;height:100vh;float:right;background:#fff;box-shadow:-4px 0 12px rgba(0,0,0,.12);padding:14px;overflow:auto}
+h2,h3{margin:6px 0}
+.stat{display:flex;justify-content:space-between;margin-bottom:6px}
+.log{background:#eef1f7;padding:6px;border-radius:6px;font-size:12px;margin-bottom:6px}
+button{width:100%;padding:10px;border:none;border-radius:8px;background:#5865f2;color:#fff;font-size:14px;margin-bottom:8px;cursor:pointer}
+.toggle{display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px}
+.rating{background:#fff7d6;border:1px solid #ffe58f;border-radius:6px;padding:6px;margin-bottom:6px}
+.small{font-size:11px;color:#555}
+.idle{color:#777}
+.busy{color:#1a7f37;font-weight:600}
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div id="panel">
+<h2>🚚 Ridendine Dispatch Pro</h2>
+<div class="small">Hamilton, Ontario — Live Demo</div>
+
+<div class="stat"><span>Orders</span><b id="orders">0</b></div>
+<div class="stat"><span>Drivers</span><b id="drivers">0</b></div>
+<div class="stat"><span>On-Time</span><b id="ontime">0</b></div>
+
+<button onclick="startDemo()">▶ Start Demo</button>
+<button onclick="speedUp()">⚡ Speed Up</button>
+
+<h3>⚙️ Toggles</h3>
+<div class="toggle"><span>Show Cooks</span><input type="checkbox" checked onchange="toggleLayer('cooks',this.checked)"></div>
+<div class="toggle"><span>Show Customers</span><input type="checkbox" checked onchange="toggleLayer('customers',this.checked)"></div>
+<div class="toggle"><span>Show Drivers</span><input type="checkbox" checked onchange="toggleLayer('drivers',this.checked)"></div>
+<div class="toggle"><span>Show Delivery Grid</span><input type="checkbox" checked onchange="toggleGrid(this.checked)"></div>
+
+<h3>⭐ Live Ratings</h3>
+<div id="ratings"></div>
+
+<h3>📜 Activity Log</h3>
+<div id="log"></div>
+</div>
+
+<script>
+const MAPBOX_KEY="pk.eyJ1Ijoic2VhbmZpbiIsImEiOiJjbWt5a2JqeGUwOGk3M2NvaDR5emppbzV2In0.cPvOgWUfy2z9f34w8ymDLA";
+let SPEED=1;
+
+const map=L.map('map').setView([43.2557,-79.8711],12); // Hamilton, ON
+L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${MAPBOX_KEY}`,{tileSize:512,zoomOffset:-1}).addTo(map);
+
+// Movable delivery grid — Hamilton core
+let grid=L.rectangle([[43.22,-79.95],[43.30,-79.80]],{color:'#5865f2',weight:2,fillOpacity:.05}).addTo(map);
+
+// Layers
+const layers={cooks:[],customers:[],drivers:[]};
+let orders=[],ontime=0;
+
+function log(msg){
+const d=document.createElement('div');
+d.className='log';
+d.innerText=new Date().toLocaleTimeString()+" — "+msg;
+document.getElementById('log').prepend(d);
+}
+
+function randomPoint(){
+const b=grid.getBounds();
+return [
+b.getSouth()+Math.random()*(b.getNorth()-b.getSouth()),
+b.getWest()+Math.random()*(b.getEast()-b.getWest())
+];
+}
+
+function toggleLayer(name,show){
+layers[name].forEach(m=>show?map.addLayer(m.marker||m):map.removeLayer(m.marker||m));
+}
+
+function toggleGrid(show){
+show?map.addLayer(grid):map.removeLayer(grid);
+}
+
+function startDemo(){
+log("Hamilton dispatch demo started");
+
+for(let i=0;i<10;i++){
+const m=L.marker(randomPoint(),{icon:L.divIcon({html:"🍳"})})
+.bindTooltip(`Cook ${i+1}<br>Active kitchen`,{direction:'top'});
+m.addTo(map); layers.cooks.push(m);
+}
+
+for(let i=0;i<200;i++){
+const m=L.circleMarker(randomPoint(),{radius:4,color:'#999'})
+.bindTooltip(`Customer Order #${i+1}`,{direction:'top'});
+m.addTo(map); layers.customers.push(m);
+orders.push({id:i+1});
+}
+
+for(let i=0;i<20;i++){
+const driver={
+status:'idle',
+marker:L.marker(randomPoint(),{icon:L.divIcon({html:"🚗"})})
+};
+driver.marker.bindTooltip(`Driver ${i+1}<br>Status: Idle`,{direction:'top'});
+driver.marker.addTo(map);
+layers.drivers.push(driver);
+}
+
+document.getElementById('orders').innerText=orders.length;
+document.getElementById('drivers').innerText=layers.drivers.length;
+
+dispatch();
+}
+
+function dispatch(){
+layers.drivers.forEach((d,idx)=>{
+if(Math.random()<0.3){
+log(`Driver ${idx+1} remains idle`);
+return;
+}
+
+const batch=orders.splice(0,2+Math.floor(Math.random()*3));
+if(!batch.length)return;
+
+d.status='busy';
+d.marker.setTooltipContent(`Driver ${idx+1}<br>Status: Busy<br>Carrying ${batch.length} orders`);
+
+batch.forEach((o,i)=>{
+setTimeout(()=>{
+ontime++;
+document.getElementById('ontime').innerText=ontime;
+log(`Order #${o.id} delivered by Driver ${idx+1}`);
+
+d.marker.setTooltipContent(`Driver ${idx+1}<br>Status: Idle`);
+d.status='idle';
+
+if(Math.random()<0.4){
+const r=document.createElement('div');
+r.className='rating';
+r.innerText=`⭐️⭐️⭐️⭐️⭐️ 👍 Driver ${idx+1} rated`;
+document.getElementById('ratings').prepend(r);
+}
+
+},(i+1)*4000/SPEED);
+});
+});
+}
+
+function speedUp(){
+SPEED*=2;
+log("Demo speed increased");
+}
+</script>
+
+</body>
+</html>

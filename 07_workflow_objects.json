@@ -1,0 +1,21 @@
+{
+  "order_workflow": {
+    "states": [
+      "placed",
+      "accepted",
+      "preparing",
+      "out_for_delivery",
+      "delivered"
+    ],
+    "transitions": {
+      "placed": "accepted",
+      "accepted": "preparing",
+      "preparing": "out_for_delivery",
+      "out_for_delivery": "delivered"
+    }
+  },
+  "payout_trigger": {
+    "condition": "order_status == delivered",
+    "action": "credit_chef_ledger"
+  }
+}

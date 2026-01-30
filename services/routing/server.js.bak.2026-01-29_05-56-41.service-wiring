@@ -1,0 +1,27 @@
+const http = require("http");
+
+const PORT = process.env.PORT || 9003;
+
+const server = http.createServer((req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  if (req.method === "GET" && req.url === "/health") {
+    res.statusCode = 200;
+    res.end(JSON.stringify({ ok: true, service: "routing" }));
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/route") {
+    res.statusCode = 200;
+    res.end(JSON.stringify({ provider: "osrm", geometry: [], durationSeconds: 0 }));
+    return;
+  }
+
+  res.statusCode = 404;
+  res.end(JSON.stringify({ error: "not found" }));
+});
+
+server.listen(PORT, () => {
+  console.log(`Routing service running on http://localhost:${PORT}`);
+});

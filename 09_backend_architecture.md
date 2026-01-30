@@ -1,0 +1,35 @@
+# Backend Architecture (Service Split)
+
+## Overview
+We will split the backend into four services:
+
+1) API service
+- Auth, users, orders, cooks, customers
+- Exposes REST endpoints
+
+2) Dispatch service
+- Batching, scoring, driver assignment
+- Emits assignments and batch plans
+
+3) Routing service
+- Provider abstraction (Mapbox/Google/OSRM)
+- ETA + route caching
+
+4) Realtime gateway
+- WebSocket/SSE channels
+- Role-based streams per order/driver
+
+## Data ownership
+- API: source of truth for orders, users, roles
+- Dispatch: reads orders, writes assignment decisions
+- Routing: stateless cache + provider adapters
+- Realtime: subscription broker (no source-of-truth state)
+
+## Contracts
+- Shared DTOs under `services/shared/contracts.js`
+
+## Next steps
+- Add Postgres schema + migrations
+- Add auth (JWT, refresh tokens)
+- Add Redis/NATS for pub/sub between services
+- Add API Gateway for single public endpoint

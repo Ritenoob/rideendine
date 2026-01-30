@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RideNDine V2 Live Routing Demo</title>
+  <meta charset="utf-8"/>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    body { margin:0; font-family: Arial; }
+    #map { height:100vh; }
+
+    .panel {
+      position:absolute;
+      top:15px; left:15px;
+      background:white;
+      padding:15px;
+      border-radius:12px;
+      width:360px;
+      z-index:999;
+      box-shadow:0 0 12px rgba(0,0,0,0.35);
+    }
+
+    button {
+      width:100%;
+      padding:10px;
+      margin-top:10px;
+      border:none;
+      border-radius:8px;
+      font-weight:bold;
+      cursor:pointer;
+    }
+
+    .run { background:#ff9800; }
+    .clear { background:#ddd; }
+
+    .small { font-size:13px; color:#333; }
+    .timeline {
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      font-size:12px;
+      color:#333;
+    }
+    .timeline-item {
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .timeline-dot {
+      width:10px;
+      height:10px;
+      border-radius:999px;
+      background:#bbb;
+      flex-shrink:0;
+    }
+    .timeline-item.active .timeline-dot {
+      background:#ff9800;
+      box-shadow:0 0 6px rgba(255,152,0,0.8);
+    }
+    .timeline-item.done .timeline-dot {
+      background:#4caf50;
+    }
+    .timeline-label {
+      text-transform:capitalize;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="panel">
+  <h2>RideNDine V2 Live Dispatch</h2>
+  <p><b>Hamilton — Eastgate Square</b></p>
+
+  <div class="small">
+    ✅ Live driver movement simulation<br>
+    ✅ Batched routes + animation<br>
+    ✅ Ready for Mapbox/Google routing API upgrade
+  </div>
+
+  <div style="margin-top:10px;">
+    <label class="small"><b>Routing Provider</b></label><br>
+    <select id="routing-provider" style="width:100%;padding:8px;border-radius:8px;">
+      <option value="osrm">OSRM (demo)</option>
+      <option value="mapbox">Mapbox Directions</option>
+      <option value="google">Google Routes</option>
+    </select>
+  </div>
+
+  <label class="small" style="display:block;margin-top:10px;">
+    <input type="checkbox" id="street-routing" checked>
+    Use real street routing (via local server)
+  </label>
+
+  <div style="margin-top:10px;">
+    <label class="small"><b>Routing Server URL</b></label><br>
+    <input id="routing-server" value="http://localhost:8080" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;">
+  </div>
+
+  <div style="margin-top:10px;">
+    <label class="small"><b>Customer View</b></label><br>
+    <select id="customer-order" style="width:100%;padding:8px;border-radius:8px;">
+      <option value="">All Orders (Dispatch View)</option>
+    </select>
+  </div>
+  <div class="small" id="customer-link" style="margin-top:6px;"></div>
+  <div class="small" id="eta-display" style="margin-top:6px;"></div>
+  <div class="small" id="status-display" style="margin-top:6px;"></div>
+  <div id="timeline" style="margin-top:8px;"></div>
+
+  <button class="run" onclick="startLive()">Run Live Dispatch</button>
+  <button class="clear" onclick="stopLive()">Clear Map</button>
+
+  <p class="small" id="status"></p>
+</div>
+
+<div id="map"></div>
+
+<script>
+const eastgate = [43.2207, -79.7651];
+const map = L.map("map").setView(eastgate, 12);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors"
+}).addTo(map);
+
+let cookMarkers = [];
+let customerMarkers = [];
+let driverMarkers = [];
+let routeLines = [];
+let animations = [];
+let liveSocket = null;
+let driverById = new Map();
+let cookById = new Map();
+let customerById = new Map();
+let cookMarkerById = new Map();
+let customerMarkerById = new Map();
+let liveData = null;
+const MAX_BATCH = 4;
+const ROUTE_LINE_STYLE = { color:"green", weight:2, opacity:0.5 };
+const SETTINGS_KEY = "ridendine_live_settings";
+let lastEtaByBatch = new Map();
+const STATUS_STEPS = ["accepted", "preparing", "ready", "picked_up", "delivering", "delivered"];
+
+function setStatus(text) {
+  document.getElementById("status").innerHTML = text;
+}
+
+function clearMap() {
+  [...cookMarkers, ...customerMarkers, ...driverMarkers, ...routeLines]
+    .forEach(item => map.removeLayer(item));
+
+  animations.forEach(anim => clearInterval(anim));
+
+  cookMarkers = [];
+  customerMarkers = [];
+  driverMarkers = [];
+  routeLines = [];
+  animations = [];
+  driverById.clear();
+  cookById.clear();
+  customerById.clear();
+  cookMarkerById.clear();
+  customerMarkerById.clear();
+  liveData = null;
+  lastEtaByBatch.clear();
+  setStatus("");
+}
+
+function stopLive() {
+  if (liveSocket) {
+    liveSocket.close();
+    liveSocket = null;
+  }
+  clearMap();
+}
+
+function startLive() {
+  clearMap();
+  setStatus("Connecting to live GPS feed...");
+
+  if (liveSocket) {
+    liveSocket.close();
+  }
+
+  applySettingsToUI();
+  const baseUrl = getRoutingServer();
+  const wsUrl = baseUrl.replace(/^http/, "ws");
+  liveSocket = new WebSocket(wsUrl);
+
+  liveSocket.onopen = () => {
+    setStatus("Connected. Waiting for live dispatch data...");
+  };
+
+  liveSocket.onmessage = (event) => {
+    let message;
+    try {
+      message = JSON.parse(event.data);
+    } catch (err) {
+      return;
+    }
+
+    if (message.type === "init") {
+      renderInit(message.data);
+      drawRoutes();
+      setStatus("✅ Live dispatch running: real-time driver GPS every 5s.");
+    }
+
+    if (message.type === "locations") {
+      updateDrivers(message.data.drivers);
+      updateOrderStatuses(message.data.orders || []);
+    }
+  };
+
+  liveSocket.onerror = () => {
+    setStatus("❌ Live feed error. Is the server running?");
+  };
+
+  liveSocket.onclose = () => {
+    setStatus("Disconnected from live feed.");
+  };
+}
+
+function renderInit(data) {
+  liveData = data;
+  populateCustomerOrders(data.orders);
+  data.cooks.forEach((cook) => {
+    const marker = L.marker([cook.lat, cook.lng]).addTo(map)
+      .bindPopup("Cook #" + cook.id);
+    cookMarkers.push(marker);
+    cookById.set(cook.id, cook);
+    cookMarkerById.set(cook.id, marker);
+  });
+
+  data.customers.forEach((customer) => {
+    const marker = L.circleMarker([customer.lat, customer.lng], {
+      radius:4,
+      color:"blue",
+      opacity:0.5
+    }).addTo(map);
+    customerMarkers.push(marker);
+    customerById.set(customer.id, customer);
+    customerMarkerById.set(customer.id, marker);
+  });
+
+  data.drivers.forEach((driver) => {
+    const marker = L.circleMarker([driver.lat, driver.lng], {
+      radius:8,
+      color:"orange",
+      fillColor:"orange",
+      fillOpacity:1
+    }).addTo(map)
+      .bindPopup("Driver #" + driver.id);
+    driverMarkers.push(marker);
+    driverById.set(driver.id, marker);
+  });
+
+  data.orders.forEach((order) => {
+    const cook = cookById.get(order.cookId);
+    const customer = customerById.get(order.customerId);
+    if (!cook || !customer) return;
+
+    const line = L.polyline([[cook.lat, cook.lng], [customer.lat, customer.lng]], ROUTE_LINE_STYLE).addTo(map);
+    routeLines.push(line);
+  });
+
+  applyCustomerView();
+}
+
+function updateDrivers(drivers) {
+  drivers.forEach((driver) => {
+    const marker = driverById.get(driver.id);
+    if (!marker) return;
+    marker.setLatLng([driver.lat, driver.lng]);
+  });
+
+  applyCustomerView();
+}
+
+function updateOrderStatuses(updates) {
+  if (!liveData || !updates.length) return;
+  const statusById = new Map();
+  updates.forEach((u) => statusById.set(u.id, u.status));
+  liveData.orders.forEach((order) => {
+    if (statusById.has(order.id)) {
+      order.status = statusById.get(order.id);
+    }
+  });
+}
+
+function buildBatches() {
+  if (!liveData) return [];
+  const byDriver = new Map();
+  liveData.orders.forEach((order) => {
+    if (!byDriver.has(order.driverId)) byDriver.set(order.driverId, []);
+    byDriver.get(order.driverId).push(order);
+  });
+
+  const batches = [];
+  byDriver.forEach((orders, driverId) => {
+    for (let i = 0; i < orders.length; i += MAX_BATCH) {
+      batches.push({ driverId, orders: orders.slice(i, i + MAX_BATCH) });
+    }
+  });
+
+  return batches;
+}
+
+async function drawRoutes() {
+  if (!liveData) return;
+
+  const useStreet = document.getElementById("street-routing").checked;
+  const provider = document.getElementById("routing-provider").value;
+  const batches = buildBatches();
+
+  if (!useStreet) {
+    return;
+  }
+
+  // Remove straight-line routes, replace with street routing
+  routeLines.forEach(line => map.removeLayer(line));
+  routeLines = [];
+
+  for (let i = 0; i < batches.length; i += 1) {
+    const batch = batches[i];
+    const driverMarker = driverById.get(batch.driverId);
+    if (!driverMarker) continue;
+
+    const coords = [driverMarker.getLatLng()];
+    batch.orders.forEach((order) => {
+      const cook = cookById.get(order.cookId);
+      const customer = customerById.get(order.customerId);
+      if (!cook || !customer) return;
+      coords.push({ lat: cook.lat, lng: cook.lng });
+      coords.push({ lat: customer.lat, lng: customer.lng });
+    });
+
+    try {
+      const route = await requestRoute(provider, coords);
+      if (!route || !route.geometry || route.geometry.length < 2) {
+        drawStraightBatch(coords);
+        continue;
+      }
+      const line = L.polyline(route.geometry, ROUTE_LINE_STYLE).addTo(map);
+      routeLines.push(line);
+      if (route.durationSeconds != null) {
+        lastEtaByBatch.set(batch.driverId, route.durationSeconds);
+      }
+    } catch (err) {
+      drawStraightBatch(coords);
+    }
+  }
+
+  updateEtaDisplay();
+}
+
+function drawStraightBatch(coords) {
+  for (let i = 1; i < coords.length; i += 1) {
+    const a = coords[i - 1];
+    const b = coords[i];
+    const line = L.polyline([[a.lat, a.lng], [b.lat, b.lng]], ROUTE_LINE_STYLE).addTo(map);
+    routeLines.push(line);
+  }
+}
+
+async function requestRoute(provider, coords) {
+  const body = {
+    provider,
+    coordinates: coords.map(c => ({ lat: c.lat, lng: c.lng })),
+    profile: "driving",
+  };
+
+  const response = await fetch(`${getRoutingServer()}/api/route`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
+}
+
+function getRoutingServer() {
+  const input = document.getElementById("routing-server");
+  if (!input) return "http://localhost:8080";
+  const value = input.value.trim();
+  return value || "http://localhost:8080";
+}
+
+function loadSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+  } catch (err) {
+    return {};
+  }
+}
+
+function saveSettings() {
+  const settings = {
+    routingServer: getRoutingServer(),
+    routingProvider: document.getElementById("routing-provider").value,
+    streetRouting: document.getElementById("street-routing").checked,
+    customerOrder: document.getElementById("customer-order").value,
+  };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function applySettingsToUI() {
+  const settings = loadSettings();
+  if (settings.routingServer) {
+    document.getElementById("routing-server").value = settings.routingServer;
+  }
+  if (settings.routingProvider) {
+    document.getElementById("routing-provider").value = settings.routingProvider;
+  }
+  if (typeof settings.streetRouting === "boolean") {
+    document.getElementById("street-routing").checked = settings.streetRouting;
+  }
+  if (settings.customerOrder) {
+    document.getElementById("customer-order").value = settings.customerOrder;
+  }
+}
+
+function populateCustomerOrders(orders) {
+  const select = document.getElementById("customer-order");
+  select.innerHTML = '<option value="">All Orders (Dispatch View)</option>';
+  orders.slice(0, 200).forEach((order) => {
+    const option = document.createElement("option");
+    option.value = order.id;
+    option.textContent = `Order ${order.id} (Driver ${order.driverId})`;
+    select.appendChild(option);
+  });
+}
+
+function applyCustomerView() {
+  if (!liveData) return;
+  const selectedOrderId = document.getElementById("customer-order").value;
+  updateShareLink(selectedOrderId);
+  if (!selectedOrderId) {
+    driverMarkers.forEach(marker => map.addLayer(marker));
+    cookMarkers.forEach(marker => map.addLayer(marker));
+    customerMarkers.forEach(marker => map.addLayer(marker));
+    updateEtaDisplay();
+    updateStatusDisplay();
+    return;
+  }
+
+  const order = liveData.orders.find(o => o.id === selectedOrderId);
+  if (!order) return;
+
+  const visibleDriver = driverById.get(order.driverId);
+  driverMarkers.forEach(marker => {
+    if (marker === visibleDriver) {
+      map.addLayer(marker);
+    } else {
+      map.removeLayer(marker);
+    }
+  });
+
+  cookMarkers.forEach(marker => {
+    if (marker === cookMarkerById.get(order.cookId)) {
+      map.addLayer(marker);
+    } else {
+      map.removeLayer(marker);
+    }
+  });
+
+  customerMarkers.forEach(marker => {
+    if (marker === customerMarkerById.get(order.customerId)) {
+      map.addLayer(marker);
+    } else {
+      map.removeLayer(marker);
+    }
+  });
+
+  updateEtaDisplay(order);
+  updateStatusDisplay(order);
+}
+
+function setupUI() {
+  const inputs = ["routing-provider", "street-routing", "routing-server", "customer-order"];
+  inputs.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", () => {
+      saveSettings();
+      if (id === "customer-order") applyCustomerView();
+      if (id === "routing-provider" || id === "street-routing" || id === "routing-server") drawRoutes();
+    });
+  });
+}
+
+async function tryLoadServerConfig() {
+  applySettingsToUI();
+  const base = getRoutingServer();
+  try {
+    const response = await fetch(`${base}/api/config`);
+    if (!response.ok) return;
+    const config = await response.json();
+    if (config.defaultProvider) {
+      document.getElementById("routing-provider").value = config.defaultProvider;
+    }
+  } catch (err) {
+    // No-op for offline mode
+  }
+}
+
+function updateShareLink(orderId) {
+  const node = document.getElementById("customer-link");
+  if (!node) return;
+  if (!orderId) {
+    node.textContent = "";
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("orderId", orderId);
+  node.textContent = `Share link: ${url.toString()}`;
+}
+
+function updateEtaDisplay(order) {
+  const node = document.getElementById("eta-display");
+  if (!node) return;
+  if (!order) {
+    node.textContent = "";
+    return;
+  }
+  const seconds = lastEtaByBatch.get(order.driverId);
+  if (!seconds) {
+    node.textContent = "ETA: calculating...";
+    return;
+  }
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  node.textContent = `ETA: ~${minutes} min`;
+}
+
+function updateStatusDisplay(order) {
+  const node = document.getElementById("status-display");
+  if (!node) return;
+  if (!order) {
+    node.textContent = "";
+    return;
+  }
+  const status = order.status || "unknown";
+  const label = status.replace(/_/g, " ");
+  node.textContent = `Status: ${label}`;
+  renderTimeline(status);
+}
+
+function renderTimeline(status) {
+  const container = document.getElementById("timeline");
+  if (!container) return;
+  if (!status) {
+    container.innerHTML = "";
+    return;
+  }
+  const currentIndex = STATUS_STEPS.indexOf(status);
+  container.className = "timeline";
+  container.innerHTML = STATUS_STEPS.map((step, index) => {
+    const classes = ["timeline-item"];
+    if (index < currentIndex) classes.push("done");
+    if (index === currentIndex) classes.push("active");
+    const label = step.replace(/_/g, " ");
+    return `<div class="${classes.join(" ")}"><span class="timeline-dot"></span><span class="timeline-label">${label}</span></div>`;
+  }).join("");
+}
+
+function applyOrderFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const orderId = params.get("orderId");
+  if (!orderId) return;
+  const select = document.getElementById("customer-order");
+  if (!select) return;
+  select.value = orderId;
+  saveSettings();
+  applyCustomerView();
+}
+
+setupUI();
+tryLoadServerConfig().then(applyOrderFromUrl);
+</script>
+
+</body>
+</html>

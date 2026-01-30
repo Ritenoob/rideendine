@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RideNDine V5 - Professional Demo System</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      margin: 0; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f5f5f5;
+    }
+    
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* Dashboard */
+    .dashboard {
+      width: 480px;
+      background: white;
+      overflow-y: auto;
+      box-shadow: 2px 0 12px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+
+    .dashboard-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 24px;
+    }
+
+    .dashboard-header h1 {
+      font-size: 26px;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .dashboard-header .subtitle {
+      opacity: 0.9;
+      font-size: 13px;
+    }
+
+    .dashboard-header .location {
+      margin-top: 8px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    /* Demo Mode Toggle */
+    .demo-mode {
+      background: #fef3c7;
+      border: 2px solid #f59e0b;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 20px;
+    }
+
+    .demo-mode h3 {
+      font-size: 14px;
+      color: #92400e;
+      margin-bottom: 12px;
+    }
+
+    .demo-toggle {
+      display: flex;
+      gap: 10px;
+    }
+
+    .demo-toggle button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .demo-toggle button.active {
+      background: #f59e0b;
+      color: white;
+    }
+
+    .demo-toggle button:not(.active) {
+      background: white;
+      color: #92400e;
+      border: 1px solid #f59e0b;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 20px;
+      background: #f8f9fa;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .stat-card.cooks .stat-value { color: #8b5cf6; }
+    .stat-card.pending .stat-value { color: #f59e0b; }
+    .stat-card.active .stat-value { color: #3b82f6; }
+    .stat-card.completed .stat-value { color: #10b981; }
+
+    /* Section */
+    .section {
+      padding: 20px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .section h3 {
+      font-size: 14px;
+      color: #374151;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    /* Grid Controls */
+    .grid-controls {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .grid-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .grid-control {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .grid-control label {
+      font-size: 11px;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .grid-control input {
+      padding: 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .grid-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .grid-toggle input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .grid-toggle label {
+      font-size: 13px;
+      color: #374151;
+      cursor: pointer;
+    }
+
+    .grid-help {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 8px;
+      padding: 8px;
+      background: #fffbeb;
+      border-radius: 4px;
+    }
+
+    /* Driver List */
+    .driver-list {
+      max-height: 350px;
+      overflow-y: auto;
+    }
+
+    .driver-card {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+      transition: all 0.2s;
+    }
+
+    .driver-card:hover {
+      background: #eff6ff;
+      border-color: #3b82f6;
+    }
+
+    .driver-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .driver-name {
+      font-weight: 600;
+      color: #374151;
+      font-size: 13px;
+    }
+
+    .driver-rating {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #f59e0b;
+      font-weight: 600;
+    }
+
+    .driver-status {
+      font-size: 11px;
+      color: #6b7280;
+      margin-bottom: 6px;
+    }
+
+    .driver-cargo {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .cargo-badge {
+      font-size: 10px;
+      padding: 3px 6px;
+      background: #dbeafe;
+      color: #1e40af;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    /* Buttons */
+    button.btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 10px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Activity Log */
+    .activity-log {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .log-item {
+      padding: 8px;
+      margin-bottom: 6px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .log-item.success { border-left: 3px solid #10b981; }
+    .log-item.warning { border-left: 3px solid #f59e0b; }
+    .log-item.error { border-left: 3px solid #ef4444; }
+    .log-item.info { border-left: 3px solid #3b82f6; }
+    .log-item.rating { border-left: 3px solid #f59e0b; background: #fffbeb; }
+
+    .log-time {
+      color: #999;
+      font-size: 9px;
+      margin-top: 2px;
+    }
+
+    /* Map */
+    #map { 
+      flex: 1;
+      height: 100vh;
+    }
+
+    /* Custom Tooltips */
+    .custom-tooltip {
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      min-width: 220px;
+      border: 2px solid #3b82f6;
+    }
+
+    .tooltip-header {
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tooltip-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 4px 0;
+      font-size: 12px;
+    }
+
+    .tooltip-label {
+      color: #6b7280;
+    }
+
+    .tooltip-value {
+      color: #374151;
+      font-weight: 600;
+    }
+
+    .tooltip-cargo {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .tooltip-cargo-title {
+      font-size: 11px;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+
+    .tooltip-dish {
+      font-size: 11px;
+      padding: 3px 6px;
+      background: #f3f4f6;
+      border-radius: 4px;
+      margin: 2px 0;
+    }
+
+    /* Grid Labels */
+    .grid-label {
+      background: rgba(255, 255, 255, 0.95);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #374151;
+      border: 2px solid #3b82f6;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    /* Star Rating Animation */
+    @keyframes starPop {
+      0% { transform: scale(0) rotate(0deg); opacity: 0; }
+      50% { transform: scale(1.5) rotate(180deg); opacity: 1; }
+      100% { transform: scale(1) rotate(360deg); opacity: 1; }
+    }
+
+    .star-marker {
+      font-size: 40px;
+      animation: starPop 0.6s ease-out;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <div class="dashboard">
+    <div class="dashboard-header">
+      <h1>🍽️ RideNDine V5 PRO</h1>
+      <div class="subtitle">Professional Demo System</div>
+      <div class="location">📍 Hamilton, Ontario</div>
+    </div>
+
+    <div class="demo-mode">
+      <h3>⚡ Demo Speed Control</h3>
+      <div class="demo-toggle">
+        <button onclick="setDemoSpeed('fast')" id="speed-fast" class="active">Fast (Demo)</button>
+        <button onclick="setDemoSpeed('normal')" id="speed-normal">Normal</button>
+        <button onclick="setDemoSpeed('slow')" id="speed-slow">Slow</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card cooks">
+        <div class="stat-label">Active Cooks</div>
+        <div class="stat-value" id="stat-cooks">0</div>
+      </div>
+      <div class="stat-card pending">
+        <div class="stat-label">Pending</div>
+        <div class="stat-value" id="stat-pending">0</div>
+      </div>
+      <div class="stat-card active">
+        <div class="stat-label">In Transit</div>
+        <div class="stat-value" id="stat-active">0</div>
+      </div>
+      <div class="stat-card completed">
+        <div class="stat-label">Completed</div>
+        <div class="stat-value" id="stat-completed">0</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>📐 Delivery Grid Control</h3>
+      <div class="grid-controls">
+        <div class="grid-row">
+          <div class="grid-control">
+            <label>Center Lat</label>
+            <input type="number" id="grid-lat" value="43.2207" step="0.01">
+          </div>
+          <div class="grid-control">
+            <label>Center Lng</label>
+            <input type="number" id="grid-lng" value="-79.7651" step="0.01">
+          </div>
+        </div>
+        <div class="grid-row">
+          <div class="grid-control">
+            <label>Radius (km)</label>
+            <input type="number" id="grid-radius" value="8" min="3" max="20">
+          </div>
+          <div class="grid-control">
+            <label>Divisions</label>
+            <input type="number" id="grid-divisions" value="4" min="2" max="8">
+          </div>
+        </div>
+        <div class="grid-toggle">
+          <input type="checkbox" id="show-grid" checked>
+          <label for="show-grid">Show Grid Zones</label>
+        </div>
+        <div class="grid-help">
+          💡 Tip: Move grid by changing Lat/Lng. Drag map center then click "Update Grid Center"
+        </div>
+        <button class="btn btn-secondary" onclick="updateGridToMapCenter()" style="margin-top: 8px;">
+          📍 Update Grid Center
+        </button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>🚗 Active Drivers (Hover for Details)</h3>
+      <div class="driver-list" id="driver-list"></div>
+    </div>
+
+    <div class="section">
+      <h3>🚗 Control Panel</h3>
+      <button class="btn btn-primary" onclick="startSystem()" id="run-btn">
+        🚀 Start Demo System
+      </button>
+      <button class="btn btn-secondary" onclick="loadSampleData()">
+        📍 Load Sample Data
+      </button>
+      <button class="btn btn-secondary" onclick="clearAll()">
+        🗑️ Clear Everything
+      </button>
+    </div>
+
+    <div class="section">
+      <h3>📊 Activity Log</h3>
+      <div class="activity-log" id="log-container"></div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<script>
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+let SPEED_MODE = 'fast';
+
+const SPEEDS = {
+  fast: {
+    BATCH_INTERVAL_MS: 3000,
+    COOK_TIME_MS: 2000,
+    ANIMATION_SPEED_MS: 150,
+    ORDER_WAVE_INTERVAL: 2000
+  },
+  normal: {
+    BATCH_INTERVAL_MS: 8000,
+    COOK_TIME_MS: 5000,
+    ANIMATION_SPEED_MS: 400,
+    ORDER_WAVE_INTERVAL: 5000
+  },
+  slow: {
+    BATCH_INTERVAL_MS: 15000,
+    COOK_TIME_MS: 8000,
+    ANIMATION_SPEED_MS: 800,
+    ORDER_WAVE_INTERVAL: 10000
+  }
+};
+
+const CONFIG = {
+  NUM_DRIVERS: 12,
+  MIN_DISHES_PER_ORDER: 2,
+  MAX_DISHES_PER_ORDER: 4,
+  RATING_CHANCE: 0.3, // 30% chance of 5-star rating
+};
+
+const MENU_ITEMS = [
+  '🍔 Burger & Fries', '🍕 Pizza Margherita', '🥗 Caesar Salad', '🍗 Chicken Wings',
+  '🍜 Pad Thai', '🍱 Sushi Roll', '🍖 BBQ Ribs', '🐟 Fish & Chips', '🥙 Poke Bowl',
+  '🍛 Butter Chicken', '🍝 Pasta Carbonara', '🌮 Tacos', '🍲 Pho Bowl', '🥙 Shawarma'
+];
+
+const HAMILTON_RESTAURANTS = [
+  { name: "Eastgate Pizza", lat: 43.2207, lng: -79.7651, address: "Eastgate Square" },
+  { name: "Lime Ridge Grill", lat: 43.2340, lng: -79.8598, address: "Lime Ridge Mall" },
+  { name: "Jackson Deli", lat: 43.2557, lng: -79.8711, address: "Jackson Square" },
+  { name: "Ancaster Bistro", lat: 43.2187, lng: -79.9886, address: "Wilson St" },
+  { name: "Westdale Cafe", lat: 43.2603, lng: -79.9019, address: "King St W" },
+  { name: "Barton Sushi", lat: 43.2468, lng: -79.7918, address: "Barton St E" },
+  { name: "Concession BBQ", lat: 43.2389, lng: -79.8142, address: "Concession St" },
+  { name: "Upper James Diner", lat: 43.2156, lng: -79.8734, address: "Upper James" },
+];
+
+// ============================================================================
+// GLOBAL STATE
+// ============================================================================
+let map;
+let gridCenter = [43.2207, -79.7651];
+let gridZones = [];
+let gridOverlays = [];
+
+let cooks = [];
+let orders = [];
+let drivers = [];
+
+let cookMarkers = [];
+let orderMarkers = [];
+let driverMarkers = [];
+let routeLines = [];
+let animations = [];
+
+let systemInterval = null;
+let orderIdCounter = 1;
+let driverIdCounter = 1;
+
+let stats = {
+  cooks: 0,
+  pending: 0,
+  active: 0,
+  completed: 0
+};
+
+// ============================================================================
+// SPEED CONTROL
+// ============================================================================
+function setDemoSpeed(speed) {
+  SPEED_MODE = speed;
+  
+  document.querySelectorAll('.demo-toggle button').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  document.getElementById(`speed-${speed}`).classList.add('active');
+  
+  logActivity(`⚡ Speed set to: ${speed.toUpperCase()}`, "info");
+}
+
+function getSpeed() {
+  return SPEEDS[SPEED_MODE];
+}
+
+// ============================================================================
+// MAP & GRID
+// ============================================================================
+function initMap() {
+  map = L.map("map").setView(gridCenter, 12);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap"
+  }).addTo(map);
+
+  drawGrid();
+  logActivity("✅ Professional demo system initialized", "success");
+}
+
+function drawGrid() {
+  gridOverlays.forEach(overlay => map.removeLayer(overlay));
+  gridOverlays = [];
+  gridZones = [];
+
+  const showGrid = document.getElementById("show-grid").checked;
+  if (!showGrid) return;
+
+  const lat = parseFloat(document.getElementById("grid-lat").value);
+  const lng = parseFloat(document.getElementById("grid-lng").value);
+  const radius = parseFloat(document.getElementById("grid-radius").value);
+  const divisions = parseInt(document.getElementById("grid-divisions").value);
+
+  gridCenter = [lat, lng];
+
+  const radiusInDegrees = radius / 111;
+  const step = (radiusInDegrees * 2) / divisions;
+
+  const startLat = lat - radiusInDegrees;
+  const startLng = lng - radiusInDegrees;
+
+  let zoneId = 1;
+
+  for (let i = 0; i < divisions; i++) {
+    for (let j = 0; j < divisions; j++) {
+      const bounds = [
+        [startLat + i * step, startLng + j * step],
+        [startLat + (i + 1) * step, startLng + (j + 1) * step]
+      ];
+
+      const zoneName = `Zone ${String.fromCharCode(65 + i)}${j + 1}`;
+      
+      gridZones.push({
+        id: zoneId++,
+        name: zoneName,
+        bounds: bounds,
+        center: [
+          (bounds[0][0] + bounds[1][0]) / 2,
+          (bounds[0][1] + bounds[1][1]) / 2
+        ]
+      });
+
+      const rectangle = L.rectangle(bounds, {
+        color: '#3b82f6',
+        weight: 2,
+        fillOpacity: 0.03,
+        className: 'grid-zone'
+      }).addTo(map);
+
+      gridOverlays.push(rectangle);
+
+      const label = L.marker(
+        [(bounds[0][0] + bounds[1][0]) / 2, (bounds[0][1] + bounds[1][1]) / 2],
+        {
+          icon: L.divIcon({
+            className: 'grid-label',
+            html: zoneName,
+            iconSize: [70, 28]
+          })
+        }
+      ).addTo(map);
+
+      gridOverlays.push(label);
+    }
+  }
+
+  map.setView(gridCenter, map.getZoom());
+  logActivity(`📐 Grid updated: ${divisions}x${divisions}, ${radius}km radius`, "info");
+}
+
+function updateGridToMapCenter() {
+  const center = map.getCenter();
+  document.getElementById("grid-lat").value = center.lat.toFixed(4);
+  document.getElementById("grid-lng").value = center.lng.toFixed(4);
+  drawGrid();
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+  ['show-grid', 'grid-radius', 'grid-divisions', 'grid-lat', 'grid-lng'].forEach(id => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.addEventListener('change', drawGrid);
+    }
+  });
+});
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+function randomInZone(zone) {
+  const latRange = zone.bounds[1][0] - zone.bounds[0][0];
+  const lngRange = zone.bounds[1][1] - zone.bounds[0][1];
+  
+  return [
+    zone.bounds[0][0] + Math.random() * latRange,
+    zone.bounds[0][1] + Math.random() * lngRange
+  ];
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+function logActivity(message, type = "info") {
+  const logContainer = document.getElementById("log-container");
+  const logItem = document.createElement("div");
+  logItem.className = `log-item ${type}`;
+  logItem.innerHTML = `
+    ${message}
+    <div class="log-time">${formatTime(new Date())}</div>
+  `;
+  
+  logContainer.insertBefore(logItem, logContainer.firstChild);
+  
+  while (logContainer.children.length > 25) {
+    logContainer.removeChild(logContainer.lastChild);
+  }
+}
+
+function updateStats() {
+  document.getElementById("stat-cooks").textContent = stats.cooks;
+  document.getElementById("stat-pending").textContent = stats.pending;
+  document.getElementById("stat-active").textContent = stats.active;
+  document.getElementById("stat-completed").textContent = stats.completed;
+}
+
+// ============================================================================
+// DATA LOADING
+// ============================================================================
+function loadSampleData() {
+  if (cooks.length > 0) {
+    logActivity("⚠️ Data already loaded", "warning");
+    return;
+  }
+
+  logActivity("📍 Loading Hamilton restaurants...", "info");
+  
+  HAMILTON_RESTAURANTS.forEach((restaurant, idx) => {
+    const zone = gridZones[idx % gridZones.length] || gridZones[0];
+    
+    const cook = {
+      id: Date.now() + idx,
+      name: restaurant.name,
+      lat: restaurant.lat,
+      lng: restaurant.lng,
+      address: restaurant.address,
+      zone: zone ? zone.name : 'Central',
+      status: 'idle',
+      orders: []
+    };
+    
+    cooks.push(cook);
+
+    const marker = L.marker([cook.lat, cook.lng], {
+      icon: L.divIcon({
+        html: '👨‍🍳',
+        className: '',
+        iconSize: [32, 32]
+      })
+    }).addTo(map);
+
+    marker.bindTooltip(createCookTooltip(cook), {
+      permanent: false,
+      direction: 'top',
+      className: 'custom-tooltip'
+    });
+    
+    cookMarkers.push({ cook, marker });
+  });
+
+  stats.cooks = cooks.length;
+  updateStats();
+  
+  logActivity(`✅ Loaded ${cooks.length} restaurants`, "success");
+}
+
+function createCookTooltip(cook) {
+  return `
+    <div class="tooltip-header">🏪 ${cook.name}</div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">Address:</span>
+      <span class="tooltip-value">${cook.address}</span>
+    </div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">Zone:</span>
+      <span class="tooltip-value">${cook.zone}</span>
+    </div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">Status:</span>
+      <span class="tooltip-value">${cook.status.toUpperCase()}</span>
+    </div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">Active Orders:</span>
+      <span class="tooltip-value">${cook.orders.length}</span>
+    </div>
+  `;
+}
+
+// ============================================================================
+// ORDER MANAGEMENT
+// ============================================================================
+function createOrder(cook) {
+  const zone = gridZones.find(z => z.name === cook.zone) || gridZones[0];
+  const customerLocation = randomInZone(zone);
+  
+  const dishes = [];
+  const numDishes = Math.floor(Math.random() * (CONFIG.MAX_DISHES_PER_ORDER - CONFIG.MIN_DISHES_PER_ORDER + 1)) + CONFIG.MIN_DISHES_PER_ORDER;
+  
+  for (let i = 0; i < numDishes; i++) {
+    dishes.push({
+      id: Date.now() + Math.random(),
+      name: MENU_ITEMS[Math.floor(Math.random() * MENU_ITEMS.length)],
+      status: 'preparing'
+    });
+  }
+
+  const order = {
+    id: orderIdCounter++,
+    cookId: cook.id,
+    cookName: cook.name,
+    customerLat: customerLocation[0],
+    customerLng: customerLocation[1],
+    zone: zone.name,
+    dishes: dishes,
+    status: 'preparing',
+    createdAt: new Date()
+  };
+
+  orders.push(order);
+  cook.orders.push(order);
+  cook.status = 'cooking';
+
+  stats.pending++;
+  updateStats();
+
+  const marker = L.circleMarker(customerLocation, {
+    radius: 7,
+    color: "#f59e0b",
+    fillColor: "#f59e0b",
+    fillOpacity: 0.7,
+    weight: 2
+  }).addTo(map);
+
+  marker.bindTooltip(createOrderTooltip(order), {
+    permanent: false,
+    direction: 'top',
+    className: 'custom-tooltip'
+  });
+
+  orderMarkers.push({ order, marker });
+
+  // Cooking completes
+  setTimeout(() => {
+    order.status = 'ready';
+    order.dishes.forEach(dish => dish.status = 'ready');
+    marker.setStyle({ color: "#10b981", fillColor: "#10b981" });
+    
+    marker.unbindTooltip();
+    marker.bindTooltip(createOrderTooltip(order), {
+      permanent: false,
+      direction: 'top',
+      className: 'custom-tooltip'
+    });
+    
+    logActivity(`✅ Order #${order.id} ready (${dishes.length} dishes)`, "success");
+  }, getSpeed().COOK_TIME_MS);
+
+  updateCookTooltips();
+  return order;
+}
+
+function createOrderTooltip(order) {
+  return `
+    <div class="tooltip-header">📦 Order #${order.id}</div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">From:</span>
+      <span class="tooltip-value">${order.cookName}</span>
+    </div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">Zone:</span>
+      <span class="tooltip-value">${order.zone}</span>
+    </div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">Status:</span>
+      <span class="tooltip-value">${order.status.toUpperCase()}</span>
+    </div>
+    <div class="tooltip-cargo">
+      <div class="tooltip-cargo-title">📋 Dishes (${order.dishes.length}):</div>
+      ${order.dishes.map(dish => `
+        <div class="tooltip-dish">${dish.name} - ${dish.status}</div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ============================================================================
+// DRIVER MANAGEMENT
+// ============================================================================
+function createDriver() {
+  const zone = gridZones[Math.floor(Math.random() * gridZones.length)];
+  const startLocation = randomInZone(zone);
+
+  const driver = {
+    id: driverIdCounter++,
+    name: `Driver #${driverIdCounter}`,
+    lat: startLocation[0],
+    lng: startLocation[1],
+    status: 'idle',
+    rating: 4.5 + Math.random() * 0.5,
+    totalDeliveries: Math.floor(Math.random() * 50),
+    currentOrders: []
+  };
+
+  const marker = L.circleMarker(startLocation, {
+    radius: 11,
+    color: "#f97316",
+    fillColor: "#f97316",
+    fillOpacity: 1,
+    weight: 3
+  }).addTo(map);
+
+  marker.bindTooltip(() => createDriverTooltip(driver), {
+    permanent: false,
+    direction: 'top',
+    className: 'custom-tooltip'
+  });
+
+  driver.marker = marker;
+  drivers.push(driver);
+  driverMarkers.push(marker);
+
+  renderDriverList();
+  return driver;
+}
+
+function createDriverTooltip(driver) {
+  const cargoHtml = driver.currentOrders.length > 0 ? `
+    <div class="tooltip-cargo">
+      <div class="tooltip-cargo-title">🎒 Carrying (${driver.currentOrders.length} orders):</div>
+      ${driver.currentOrders.map(order => `
+        <div style="margin: 4px 0; font-weight: 600; font-size: 11px;">
+          Order #${order.id} → ${order.zone}
+        </div>
+        ${order.dishes.map(dish => `
+          <div class="tooltip-dish">${dish.name}</div>
+        `).join('')}
+      `).join('')}
+    </div>
+  ` : '<div style="margin-top: 8px; font-size: 11px; color: #6b7280;">No current deliveries</div>';
+
+  return `
+    <div class="tooltip-header">🚗 ${driver.name}</div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">Status:</span>
+      <span class="tooltip-value">${driver.status.toUpperCase()}</span>
+    </div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">Rating:</span>
+      <span class="tooltip-value">⭐ ${driver.rating.toFixed(1)}</span>
+    </div>
+    <div class="tooltip-row">
+      <span class="tooltip-label">Deliveries:</span>
+      <span class="tooltip-value">${driver.totalDeliveries}</span>
+    </div>
+    ${cargoHtml}
+  `;
+}
+
+function renderDriverList() {
+  const container = document.getElementById("driver-list");
+  container.innerHTML = "";
+
+  drivers.forEach(driver => {
+    const card = document.createElement("div");
+    card.className = "driver-card";
+    
+    const cargoHtml = driver.currentOrders.length > 0 ? `
+      <div class="driver-cargo">
+        ${driver.currentOrders.map(order => 
+          `<span class="cargo-badge">Order #${order.id} (${order.dishes.length})</span>`
+        ).join('')}
+      </div>
+    ` : '<div style="font-size: 11px; color: #9ca3af;">No active deliveries</div>';
+
+    card.innerHTML = `
+      <div class="driver-header">
+        <div class="driver-name">🚗 ${driver.name}</div>
+        <div class="driver-rating">⭐ ${driver.rating.toFixed(1)}</div>
+      </div>
+      <div class="driver-status">
+        ${driver.status.toUpperCase()} • ${driver.totalDeliveries} deliveries
+      </div>
+      ${cargoHtml}
+    `;
+    
+    container.appendChild(card);
+  });
+}
+
+// ============================================================================
+// DISPATCH & DELIVERY
+// ============================================================================
+function dispatchDriver() {
+  const readyOrders = orders.filter(o => o.status === 'ready');
+  if (readyOrders.length === 0) return;
+
+  let driver = drivers.find(d => d.status === 'idle');
+  
+  if (!driver && drivers.length < CONFIG.NUM_DRIVERS) {
+    driver = createDriver();
+  }
+  
+  if (!driver) return;
+
+  const batchSize = Math.min(
+    Math.floor(Math.random() * (CONFIG.MAX_DISHES_PER_ORDER - CONFIG.MIN_DISHES_PER_ORDER + 1)) + CONFIG.MIN_DISHES_PER_ORDER,
+    readyOrders.length
+  );
+
+  const selectedOrders = readyOrders.slice(0, batchSize);
+  
+  driver.currentOrders = selectedOrders;
+  driver.status = 'delivering';
+
+  selectedOrders.forEach(order => {
+    order.status = 'in-transit';
+    order.dishes.forEach(dish => dish.status = 'in-transit');
+  });
+
+  stats.pending -= selectedOrders.length;
+  stats.active += selectedOrders.length;
+  updateStats();
+
+  logActivity(`🚚 ${driver.name} dispatched with ${selectedOrders.length} orders`, "info");
+
+  // Build route
+  let waypoints = [[driver.lat, driver.lng]];
+  
+  selectedOrders.forEach(order => {
+    const cook = cooks.find(c => c.id === order.cookId);
+    waypoints.push([cook.lat, cook.lng]);
+    waypoints.push([order.customerLat, order.customerLng]);
+  });
+
+  const routeLine = L.polyline(waypoints, {
+    color: "#10b981",
+    weight: 3,
+    opacity: 0.6
+  }).addTo(map);
+
+  routeLines.push(routeLine);
+
+  animateDelivery(driver, waypoints, selectedOrders);
+  renderDriverList();
+  updateCookTooltips();
+}
+
+function animateDelivery(driver, path, deliveryOrders) {
+  let step = 0;
+  
+  const interval = setInterval(() => {
+    if (step >= path.length) {
+      clearInterval(interval);
+      completeDelivery(driver, deliveryOrders);
+      return;
+    }
+    
+    driver.lat = path[step][0];
+    driver.lng = path[step][1];
+    driver.marker.setLatLng(path[step]);
+    
+    step++;
+  }, getSpeed().ANIMATION_SPEED_MS);
+
+  animations.push(interval);
+}
+
+function completeDelivery(driver, deliveryOrders) {
+  driver.status = 'idle';
+  driver.currentOrders = [];
+  driver.totalDeliveries += deliveryOrders.length;
+
+  stats.active -= deliveryOrders.length;
+  stats.completed += deliveryOrders.length;
+  updateStats();
+
+  // 5-Star Rating Chance
+  if (Math.random() < CONFIG.RATING_CHANCE) {
+    showFiveStarRating(driver);
+  }
+
+  deliveryOrders.forEach(order => {
+    order.status = 'delivered';
+    order.dishes.forEach(dish => dish.status = 'delivered');
+    
+    const cook = cooks.find(c => c.id === order.cookId);
+    if (cook) {
+      cook.orders = cook.orders.filter(o => o.id !== order.id);
+      if (cook.orders.length === 0) {
+        cook.status = 'idle';
+      }
+    }
+
+    const markerData = orderMarkers.find(m => m.order.id === order.id);
+    if (markerData) {
+      map.removeLayer(markerData.marker);
+      orderMarkers = orderMarkers.filter(m => m.order.id !== order.id);
+    }
+  });
+
+  logActivity(`✅ ${driver.name} completed ${deliveryOrders.length} deliveries`, "success");
+  
+  renderDriverList();
+  updateCookTooltips();
+}
+
+function showFiveStarRating(driver) {
+  driver.rating = Math.min(5.0, driver.rating + 0.1);
+  
+  const starMarker = L.marker([driver.lat, driver.lng], {
+    icon: L.divIcon({
+      html: '<div class="star-marker">⭐👍</div>',
+      className: '',
+      iconSize: [50, 50]
+    }),
+    zIndexOffset: 1000
+  }).addTo(map);
+
+  logActivity(`⭐ ${driver.name} received 5-STAR rating! New rating: ${driver.rating.toFixed(1)}`, "rating");
+
+  setTimeout(() => {
+    map.removeLayer(starMarker);
+  }, 2000);
+
+  renderDriverList();
+}
+
+function updateCookTooltips() {
+  cookMarkers.forEach(({ cook, marker }) => {
+    marker.unbindTooltip();
+    marker.bindTooltip(createCookTooltip(cook), {
+      permanent: false,
+      direction: 'top',
+      className: 'custom-tooltip'
+    });
+  });
+}
+
+// ============================================================================
+// SYSTEM CONTROL
+// ============================================================================
+function startSystem() {
+  if (cooks.length === 0) {
+    alert("⚠️ Please load sample data first!");
+    return;
+  }
+
+  const runBtn = document.getElementById("run-btn");
+  
+  if (systemInterval) {
+    clearInterval(systemInterval);
+    systemInterval = null;
+    runBtn.textContent = "🚀 Start Demo System";
+    logActivity("⏸️ System paused", "warning");
+    return;
+  }
+
+  runBtn.textContent = "⏸️ Pause System";
+  logActivity("🔥 Demo system started - orders flowing!", "success");
+
+  createOrderWave();
+
+  systemInterval = setInterval(() => {
+    createOrderWave();
+    dispatchDriver();
+  }, getSpeed().ORDER_WAVE_INTERVAL);
+}
+
+function createOrderWave() {
+  const numOrders = Math.floor(Math.random() * 3) + 2;
+  
+  for (let i = 0; i < numOrders; i++) {
+    const randomCook = cooks[Math.floor(Math.random() * cooks.length)];
+    createOrder(randomCook);
+  }
+  
+  logActivity(`📋 New wave: ${numOrders} orders created`, "info");
+}
+
+function clearAll() {
+  [...cookMarkers.map(c => c.marker), ...orderMarkers.map(m => m.marker), ...driverMarkers, ...routeLines]
+    .forEach(item => map.removeLayer(item));
+
+  animations.forEach(anim => clearInterval(anim));
+  if (systemInterval) clearInterval(systemInterval);
+
+  cookMarkers = [];
+  orderMarkers = [];
+  driverMarkers = [];
+  routeLines = [];
+  animations = [];
+
+  cooks = [];
+  orders = [];
+  drivers = [];
+  
+  systemInterval = null;
+  orderIdCounter = 1;
+  driverIdCounter = 1;
+
+  stats = { cooks: 0, pending: 0, active: 0, completed: 0 };
+  updateStats();
+  renderDriverList();
+
+  document.getElementById("run-btn").textContent = "🚀 Start Demo System";
+  
+  logActivity("🗑️ System cleared", "warning");
+}
+
+// ============================================================================
+// INIT
+// ============================================================================
+window.addEventListener('load', initMap);
+
+</script>
+
+</body>
+</html>

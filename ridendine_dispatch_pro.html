@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ridendine Dispatch Pro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+body{margin:0;font-family:Inter,Arial;background:#f4f6fb}
+#map{width:70%;height:100vh;float:left}
+#panel{width:30%;height:100vh;float:right;background:#fff;box-shadow:-4px 0 10px rgba(0,0,0,.1);padding:16px;overflow:auto}
+h2,h3{margin-top:0}
+.stat{display:flex;justify-content:space-between;margin-bottom:6px}
+.log{background:#eef1f7;padding:6px;border-radius:6px;font-size:12px;margin-bottom:6px}
+button{width:100%;padding:10px;border:none;border-radius:8px;background:#5865f2;color:#fff;font-size:15px;margin-bottom:10px;cursor:pointer}
+.rating{background:#fff7d6;border:1px solid #ffe58f;border-radius:6px;padding:6px;margin-bottom:6px}
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div id="panel">
+<h2>🚚 Ridendine Dispatch Pro</h2>
+
+<div class="stat"><span>Total Orders</span><b id="orders">0</b></div>
+<div class="stat"><span>Drivers</span><b id="drivers">0</b></div>
+<div class="stat"><span>On-Time</span><b id="ontime">0</b></div>
+
+<button onclick="startDispatch()">🚀 Start Live Dispatch</button>
+
+<h3>⭐ Live 5‑Star Ratings</h3>
+<div id="ratings"></div>
+
+<h3>📜 Activity Log</h3>
+<div id="log"></div>
+</div>
+
+<script>
+const MAPBOX_KEY = "pk.eyJ1Ijoic2VhbmZpbiIsImEiOiJjbWt5a2JqeGUwOGk3M2NvaDR5emppbzV2In0.cPvOgWUfy2z9f34w8ymDLA";
+
+const map = L.map('map').setView([43.09,-79.09],12);
+L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${MAPBOX_KEY}`,{
+tileSize:512,zoomOffset:-1}).addTo(map);
+
+// Delivery Grid
+const gridBounds = [[43.05,-79.15],[43.13,-79.02]];
+L.rectangle(gridBounds,{color:"#5865f2",weight:2,fillOpacity:.05}).addTo(map);
+
+let cooks=[],drivers=[],orders=[];
+let ontime=0;
+
+function log(msg){
+const d=document.createElement("div");
+d.className="log";
+d.innerText=new Date().toLocaleTimeString()+" — "+msg;
+document.getElementById("log").prepend(d);
+}
+
+function randomPoint(){
+return [43.05+Math.random()*0.08,-79.15+Math.random()*0.13];
+}
+
+function startDispatch(){
+log("Dispatch initialized");
+
+for(let i=0;i<10;i++){
+L.marker(randomPoint(),{icon:L.divIcon({html:"🍳"})}).addTo(map);
+}
+
+for(let i=0;i<20;i++){
+drivers.push(L.marker(randomPoint(),{icon:L.divIcon({html:"🚗"})}).addTo(map));
+}
+
+for(let i=1;i<=200;i++){orders.push(i)}
+
+document.getElementById("orders").innerText=orders.length;
+document.getElementById("drivers").innerText=drivers.length;
+
+dispatchBatches();
+}
+
+function dispatchBatches(){
+drivers.forEach((d,idx)=>{
+const batch=orders.splice(0,2+Math.floor(Math.random()*3));
+batch.forEach((id,i)=>{
+setTimeout(()=>{
+ontime++;
+document.getElementById("ontime").innerText=ontime;
+log(`Order #${id} delivered`);
+if(Math.random()<0.4){
+const r=document.createElement("div");
+r.className="rating";
+r.innerText=`⭐⭐⭐⭐⭐ Customer rated Order #${id}`;
+document.getElementById("ratings").prepend(r);
+}
+},(i+1)*5000);
+});
+});
+}
+</script>
+
+</body>
+</html>

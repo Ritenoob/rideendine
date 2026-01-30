@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RideNDine V3 - Hamilton Fleet Management</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      margin: 0; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f5f5f5;
+    }
+    
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* Dashboard Sidebar */
+    .dashboard {
+      width: 420px;
+      background: white;
+      overflow-y: auto;
+      box-shadow: 2px 0 12px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+
+    .dashboard-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 24px;
+    }
+
+    .dashboard-header h1 {
+      font-size: 24px;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .dashboard-header .subtitle {
+      opacity: 0.9;
+      font-size: 13px;
+    }
+
+    .dashboard-header .location {
+      margin-top: 8px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 20px;
+      background: #f8f9fa;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .stat-card.cooks .stat-value { color: #8b5cf6; }
+    .stat-card.orders .stat-value { color: #3b82f6; }
+    .stat-card.drivers .stat-value { color: #f97316; }
+    .stat-card.active .stat-value { color: #10b981; }
+
+    /* Section */
+    .section {
+      padding: 20px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .section h3 {
+      font-size: 14px;
+      color: #374151;
+      margin-bottom: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-content {
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.6;
+    }
+
+    /* API Key Section */
+    .api-key-section {
+      background: #fef3c7;
+      border: 1px solid #fbbf24;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .api-key-section h3 {
+      font-size: 13px;
+      color: #92400e;
+      margin-bottom: 8px;
+    }
+
+    .api-key-section input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #fbbf24;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .api-status {
+      margin-top: 8px;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .api-status.connected {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .api-status.disconnected {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    /* Batch Management */
+    .batch-controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .batch-controls input {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .batch-controls button {
+      padding: 8px 16px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .batch-controls button:hover {
+      background: #2563eb;
+    }
+
+    .batch-list {
+      margin-top: 12px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .batch-item {
+      padding: 8px;
+      margin-bottom: 6px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .batch-item .name {
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .batch-item .address {
+      color: #6b7280;
+      font-size: 11px;
+    }
+
+    .batch-item button {
+      padding: 4px 8px;
+      background: #ef4444;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 10px;
+    }
+
+    /* Buttons */
+    button.btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 10px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #d1d5db;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Activity Log */
+    .activity-log {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .log-item {
+      padding: 10px;
+      margin-bottom: 8px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .log-item.success { border-left: 3px solid #10b981; }
+    .log-item.warning { border-left: 3px solid #f59e0b; }
+    .log-item.error { border-left: 3px solid #ef4444; }
+    .log-item.info { border-left: 3px solid #3b82f6; }
+
+    .log-time {
+      color: #999;
+      font-size: 10px;
+      display: block;
+      margin-top: 4px;
+    }
+
+    /* Map Container */
+    #map { 
+      flex: 1;
+      height: 100vh;
+    }
+
+    /* Custom Popup */
+    .custom-popup {
+      font-size: 13px;
+      min-width: 200px;
+    }
+
+    .popup-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .popup-detail {
+      margin: 4px 0;
+      color: #666;
+    }
+
+    .popup-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    .popup-badge.cook { background: #ede9fe; color: #6b21a8; }
+    .popup-badge.order { background: #dbeafe; color: #1e40af; }
+    .popup-badge.driver { background: #ffedd5; color: #9a3412; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #555; }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <!-- Dashboard Sidebar -->
+  <div class="dashboard">
+    <div class="dashboard-header">
+      <h1>🍽️ RideNDine V3</h1>
+      <div class="subtitle">Real Street Routing + Fleet Management</div>
+      <div class="location">📍 Hamilton, Ontario, Canada</div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card cooks">
+        <div class="stat-label">Restaurants</div>
+        <div class="stat-value" id="stat-cooks">0</div>
+      </div>
+      <div class="stat-card orders">
+        <div class="stat-label">Orders</div>
+        <div class="stat-value" id="stat-orders">0</div>
+      </div>
+      <div class="stat-card drivers">
+        <div class="stat-label">Drivers</div>
+        <div class="stat-value" id="stat-drivers">0</div>
+      </div>
+      <div class="stat-card active">
+        <div class="stat-label">Deliveries</div>
+        <div class="stat-value" id="stat-active">0</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>🔑 API Configuration</h3>
+      <div class="api-key-section">
+        <h3>Mapbox API Key</h3>
+        <input 
+          type="text" 
+          id="mapbox-key" 
+          placeholder="pk.eyJ1..."
+          value="">
+        <div id="api-status" class="api-status disconnected">⚠️ Not validated</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>🏪 Restaurant Management</h3>
+      <div class="section-content">
+        <div class="batch-controls">
+          <input type="text" id="cook-name" placeholder="Restaurant name">
+          <button onclick="addCook()">+ Add</button>
+        </div>
+        <div class="batch-list" id="cook-list"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>📦 Customer Orders</h3>
+      <div class="section-content">
+        <div class="batch-controls">
+          <input type="text" id="customer-name" placeholder="Customer name">
+          <button onclick="addCustomer()">+ Add</button>
+        </div>
+        <div class="batch-list" id="customer-list"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>🚗 Control Panel</h3>
+      <button class="btn btn-primary" onclick="runSimulation()" id="run-btn">
+        🚀 Run Live Dispatch
+      </button>
+      <button class="btn btn-secondary" onclick="loadDefaultLocations()">
+        📍 Load Sample Data
+      </button>
+      <button class="btn btn-secondary" onclick="clearAll()">
+        🗑️ Clear Everything
+      </button>
+    </div>
+
+    <div class="section">
+      <h3>📊 Activity Log</h3>
+      <div class="activity-log" id="log-container"></div>
+    </div>
+  </div>
+
+  <!-- Map Container -->
+  <div id="map"></div>
+</div>
+
+<script>
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+const CONFIG = {
+  center: [43.2207, -79.7651], // Hamilton - Eastgate Square
+  zoom: 12,
+  
+  NUM_DRIVERS: 15,
+  MAX_BATCH: 4,
+  
+  DRIVER_START_RADIUS_KM: 5,
+  ORDER_RADIUS_KM: 15,
+  
+  SLA_MINUTES: 45,
+  ANIMATION_SPEED_MS: 800,
+};
+
+// Hamilton Real Locations Database
+const HAMILTON_LOCATIONS = {
+  restaurants: [
+    { name: "Eastgate Pizza & Wings", lat: 43.2207, lng: -79.7651, address: "Eastgate Square" },
+    { name: "Lime Ridge Grill", lat: 43.2340, lng: -79.8598, address: "Lime Ridge Mall" },
+    { name: "Jackson Square Deli", lat: 43.2557, lng: -79.8711, address: "Jackson Square" },
+    { name: "Ancaster Bistro", lat: 43.2187, lng: -79.9886, address: "Wilson St W" },
+    { name: "Westdale Cafe", lat: 43.2603, lng: -79.9019, address: "King St W" },
+    { name: "Barton Street Sushi", lat: 43.2468, lng: -79.7918, address: "Barton St E" },
+    { name: "Concession BBQ", lat: 43.2389, lng: -79.8142, address: "Concession St" },
+    { name: "Upper James Burger", lat: 43.2156, lng: -79.8734, address: "Upper James" },
+    { name: "Mohawk Thai Kitchen", lat: 43.2267, lng: -79.8456, address: "Mohawk Rd E" },
+    { name: "Dundas Valley Pizza", lat: 43.2643, lng: -79.9597, address: "King St W" }
+  ],
+  
+  landmarks: [
+    { name: "McMaster University", lat: 43.2609, lng: -79.9192 },
+    { name: "Hamilton General Hospital", lat: 43.2538, lng: -79.8625 },
+    { name: "Copps Coliseum", lat: 43.2537, lng: -79.8694 },
+    { name: "Hamilton Centre GO", lat: 43.2564, lng: -79.8687 },
+    { name: "Mohawk College", lat: 43.2332, lng: -79.8916 }
+  ]
+};
+
+// ============================================================================
+// GLOBAL STATE
+// ============================================================================
+let map;
+let cookMarkers = [];
+let customerMarkers = [];
+let driverMarkers = [];
+let routeLines = [];
+let animations = [];
+
+let cooks = [];
+let customers = [];
+
+let stats = {
+  cooks: 0,
+  orders: 0,
+  drivers: 0,
+  active: 0
+};
+
+// ============================================================================
+// MAP INITIALIZATION
+// ============================================================================
+function initMap() {
+  map = L.map("map").setView(CONFIG.center, CONFIG.zoom);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors"
+  }).addTo(map);
+
+  // Add Hamilton landmarks for reference
+  HAMILTON_LOCATIONS.landmarks.forEach(landmark => {
+    L.circleMarker([landmark.lat, landmark.lng], {
+      radius: 8,
+      color: "#94a3b8",
+      fillColor: "#cbd5e1",
+      fillOpacity: 0.5,
+      weight: 2
+    }).addTo(map).bindPopup(`
+      <div class="custom-popup">
+        <div class="popup-title">📍 ${landmark.name}</div>
+        <div class="popup-detail">Hamilton Landmark</div>
+      </div>
+    `);
+  });
+
+  logActivity("Map initialized - Hamilton, Ontario", "success");
+  validateApiKey();
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+function randomCoord(center, radiusKm) {
+  let r = radiusKm / 111;
+  let u = Math.random();
+  let v = Math.random();
+  let w = r * Math.sqrt(u);
+  let t = 2 * Math.PI * v;
+  let x = w * Math.cos(t);
+  let y = w * Math.sin(t);
+  return [center[0] + y, center[1] + x];
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+function logActivity(message, type = "info") {
+  const logContainer = document.getElementById("log-container");
+  const logItem = document.createElement("div");
+  logItem.className = `log-item ${type}`;
+  logItem.innerHTML = `
+    ${message}
+    <span class="log-time">${formatTime(new Date())}</span>
+  `;
+  
+  logContainer.insertBefore(logItem, logContainer.firstChild);
+  
+  while (logContainer.children.length > 15) {
+    logContainer.removeChild(logContainer.lastChild);
+  }
+}
+
+function updateStats() {
+  document.getElementById("stat-cooks").textContent = stats.cooks;
+  document.getElementById("stat-orders").textContent = stats.orders;
+  document.getElementById("stat-drivers").textContent = stats.drivers;
+  document.getElementById("stat-active").textContent = stats.active;
+}
+
+function validateApiKey() {
+  const apiKey = document.getElementById("mapbox-key").value.trim();
+  const statusDiv = document.getElementById("api-status");
+  
+  if (apiKey && apiKey.startsWith('pk.')) {
+    statusDiv.className = "api-status connected";
+    statusDiv.textContent = "✅ API Key Connected";
+    return true;
+  } else {
+    statusDiv.className = "api-status disconnected";
+    statusDiv.textContent = "⚠️ Invalid API Key";
+    return false;
+  }
+}
+
+// ============================================================================
+// BATCH MANAGEMENT
+// ============================================================================
+function addCook() {
+  const nameInput = document.getElementById("cook-name");
+  const name = nameInput.value.trim();
+  
+  if (!name) {
+    alert("Please enter a restaurant name");
+    return;
+  }
+  
+  const coord = randomCoord(CONFIG.center, 8);
+  const cook = {
+    id: Date.now(),
+    name: name,
+    lat: coord[0],
+    lng: coord[1],
+    address: `${coord[0].toFixed(4)}, ${coord[1].toFixed(4)}`
+  };
+  
+  cooks.push(cook);
+  stats.cooks = cooks.length;
+  updateStats();
+  
+  renderCookList();
+  nameInput.value = "";
+  
+  logActivity(`Added restaurant: ${name}`, "success");
+}
+
+function addCustomer() {
+  const nameInput = document.getElementById("customer-name");
+  const name = nameInput.value.trim();
+  
+  if (!name) {
+    alert("Please enter a customer name");
+    return;
+  }
+  
+  if (cooks.length === 0) {
+    alert("Please add restaurants first!");
+    return;
+  }
+  
+  const randomCook = cooks[Math.floor(Math.random() * cooks.length)];
+  const coord = randomCoord(CONFIG.center, CONFIG.ORDER_RADIUS_KM);
+  
+  const customer = {
+    id: Date.now(),
+    name: name,
+    lat: coord[0],
+    lng: coord[1],
+    cookId: randomCook.id,
+    cookName: randomCook.name,
+    address: `${coord[0].toFixed(4)}, ${coord[1].toFixed(4)}`
+  };
+  
+  customers.push(customer);
+  stats.orders = customers.length;
+  updateStats();
+  
+  renderCustomerList();
+  nameInput.value = "";
+  
+  logActivity(`Added order: ${name} from ${randomCook.name}`, "success");
+}
+
+function removeCook(id) {
+  cooks = cooks.filter(c => c.id !== id);
+  stats.cooks = cooks.length;
+  updateStats();
+  renderCookList();
+  logActivity("Removed restaurant", "warning");
+}
+
+function removeCustomer(id) {
+  customers = customers.filter(c => c.id !== id);
+  stats.orders = customers.length;
+  updateStats();
+  renderCustomerList();
+  logActivity("Removed order", "warning");
+}
+
+function renderCookList() {
+  const listContainer = document.getElementById("cook-list");
+  listContainer.innerHTML = "";
+  
+  cooks.forEach(cook => {
+    const item = document.createElement("div");
+    item.className = "batch-item";
+    item.innerHTML = `
+      <div>
+        <div class="name">🏪 ${cook.name}</div>
+        <div class="address">${cook.address}</div>
+      </div>
+      <button onclick="removeCook(${cook.id})">×</button>
+    `;
+    listContainer.appendChild(item);
+  });
+}
+
+function renderCustomerList() {
+  const listContainer = document.getElementById("customer-list");
+  listContainer.innerHTML = "";
+  
+  customers.forEach(customer => {
+    const item = document.createElement("div");
+    item.className = "batch-item";
+    item.innerHTML = `
+      <div>
+        <div class="name">👤 ${customer.name}</div>
+        <div class="address">From: ${customer.cookName}</div>
+      </div>
+      <button onclick="removeCustomer(${customer.id})">×</button>
+    `;
+    listContainer.appendChild(item);
+  });
+}
+
+function loadDefaultLocations() {
+  clearAll();
+  
+  logActivity("Loading sample Hamilton restaurants...", "info");
+  
+  // Load all Hamilton restaurants
+  HAMILTON_LOCATIONS.restaurants.forEach(restaurant => {
+    cooks.push({
+      id: Date.now() + Math.random(),
+      name: restaurant.name,
+      lat: restaurant.lat,
+      lng: restaurant.lng,
+      address: restaurant.address
+    });
+  });
+  
+  stats.cooks = cooks.length;
+  renderCookList();
+  
+  // Generate 50 sample customers
+  logActivity("Generating 50 sample orders...", "info");
+  
+  for (let i = 0; i < 50; i++) {
+    const randomCook = cooks[Math.floor(Math.random() * cooks.length)];
+    const coord = randomCoord(CONFIG.center, CONFIG.ORDER_RADIUS_KM);
+    
+    customers.push({
+      id: Date.now() + Math.random() + i,
+      name: `Customer #${i + 1}`,
+      lat: coord[0],
+      lng: coord[1],
+      cookId: randomCook.id,
+      cookName: randomCook.name,
+      address: `${coord[0].toFixed(4)}, ${coord[1].toFixed(4)}`
+    });
+  }
+  
+  stats.orders = customers.length;
+  renderCustomerList();
+  updateStats();
+  
+  logActivity("✅ Sample data loaded: 10 restaurants + 50 orders", "success");
+}
+
+// ============================================================================
+// MAPBOX ROUTING
+// ============================================================================
+async function getMapboxRoute(waypoints, apiKey) {
+  const coordinates = waypoints.map(w => `${w[1]},${w[0]}`).join(';');
+  const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates}?geometries=geojson&overview=full&access_token=${apiKey}`;
+  
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+      throw new Error('No route found');
+    }
+    
+    const route = data.routes[0];
+    const path = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+    
+    return {
+      path: path,
+      distance: route.distance,
+      duration: route.duration
+    };
+  } catch (error) {
+    console.error('Mapbox routing error:', error);
+    throw error;
+  }
+}
+
+// ============================================================================
+// SIMULATION
+// ============================================================================
+function clearAll() {
+  [...cookMarkers, ...customerMarkers, ...driverMarkers, ...routeLines]
+    .forEach(item => map.removeLayer(item));
+
+  animations.forEach(anim => clearInterval(anim));
+
+  cookMarkers = [];
+  customerMarkers = [];
+  driverMarkers = [];
+  routeLines = [];
+  animations = [];
+  
+  cooks = [];
+  customers = [];
+  
+  stats = { cooks: 0, orders: 0, drivers: 0, active: 0 };
+  updateStats();
+  
+  renderCookList();
+  renderCustomerList();
+  
+  logActivity("System cleared", "warning");
+}
+
+function animateDriver(marker, path, driverId) {
+  let step = 0;
+  
+  const interval = setInterval(() => {
+    if (step >= path.length) {
+      clearInterval(interval);
+      stats.active = Math.max(0, stats.active - 1);
+      updateStats();
+      logActivity(`Driver #${driverId} completed delivery`, "success");
+      return;
+    }
+    
+    marker.setLatLng(path[step]);
+    step++;
+  }, CONFIG.ANIMATION_SPEED_MS);
+
+  animations.push(interval);
+}
+
+async function runSimulation() {
+  const apiKey = document.getElementById("mapbox-key").value.trim();
+  
+  if (!validateApiKey()) {
+    alert("⚠️ Please enter a valid Mapbox API key (starts with pk.)");
+    return;
+  }
+  
+  if (cooks.length === 0) {
+    alert("⚠️ Please add restaurants first! Use 'Load Sample Data' or add manually.");
+    return;
+  }
+  
+  if (customers.length === 0) {
+    alert("⚠️ Please add customer orders first!");
+    return;
+  }
+
+  // Clear previous simulation
+  [...driverMarkers, ...routeLines].forEach(item => map.removeLayer(item));
+  animations.forEach(anim => clearInterval(anim));
+  driverMarkers = [];
+  routeLines = [];
+  animations = [];
+  
+  const runBtn = document.getElementById("run-btn");
+  runBtn.disabled = true;
+  runBtn.textContent = "🔄 Running Simulation...";
+  
+  logActivity("Starting live dispatch simulation...", "info");
+
+  try {
+    // 1) Place cook markers
+    logActivity(`Placing ${cooks.length} restaurant markers...`, "info");
+    
+    cooks.forEach((cook, i) => {
+      const marker = L.marker([cook.lat, cook.lng], {
+        icon: L.divIcon({
+          html: '👨‍🍳',
+          className: '',
+          iconSize: [30, 30]
+        })
+      }).addTo(map).bindPopup(`
+        <div class="custom-popup">
+          <div class="popup-title">🏪 ${cook.name}</div>
+          <div class="popup-detail">${cook.address}</div>
+          <div class="popup-badge cook">Restaurant #${i + 1}</div>
+        </div>
+      `);
+      
+      cookMarkers.push(marker);
+    });
+
+    // 2) Place customer markers
+    logActivity(`Placing ${customers.length} order markers...`, "info");
+    
+    customers.forEach((customer, i) => {
+      const marker = L.circleMarker([customer.lat, customer.lng], {
+        radius: 6,
+        color: "#3b82f6",
+        fillColor: "#3b82f6",
+        fillOpacity: 0.6,
+        weight: 2
+      }).addTo(map).bindPopup(`
+        <div class="custom-popup">
+          <div class="popup-title">📦 ${customer.name}</div>
+          <div class="popup-detail">From: ${customer.cookName}</div>
+          <div class="popup-detail">${customer.address}</div>
+          <div class="popup-badge order">Order #${i + 1}</div>
+        </div>
+      `);
+      
+      customerMarkers.push(marker);
+    });
+
+    // 3) Create drivers
+    logActivity(`Deploying ${CONFIG.NUM_DRIVERS} drivers...`, "info");
+    
+    let drivers = [];
+    for (let i = 0; i < CONFIG.NUM_DRIVERS; i++) {
+      let driverStart = randomCoord(CONFIG.center, CONFIG.DRIVER_START_RADIUS_KM);
+
+      let marker = L.circleMarker(driverStart, {
+        radius: 10,
+        color: "#f97316",
+        fillColor: "#f97316",
+        fillOpacity: 1,
+        weight: 3
+      }).addTo(map).bindPopup(`
+        <div class="custom-popup">
+          <div class="popup-title">🚗 Driver #${i + 1}</div>
+          <div class="popup-detail">Status: Active</div>
+          <div class="popup-badge driver">On Route</div>
+        </div>
+      `);
+
+      drivers.push(marker);
+      driverMarkers.push(marker);
+    }
+    
+    stats.drivers = CONFIG.NUM_DRIVERS;
+    updateStats();
+
+    // 4) Create order batches
+    let orderBatches = [];
+    let ordersClone = [...customers];
+    
+    while (ordersClone.length > 0) {
+      orderBatches.push(ordersClone.splice(0, CONFIG.MAX_BATCH));
+    }
+
+    logActivity(`Created ${orderBatches.length} route batches`, "info");
+    stats.active = orderBatches.length;
+    updateStats();
+
+    // 5) Route and animate
+    logActivity("Fetching real street routes from Mapbox...", "info");
+    
+    let successfulRoutes = 0;
+    let failedRoutes = 0;
+    
+    for (let i = 0; i < orderBatches.length; i++) {
+      const batch = orderBatches[i];
+      const driverMarker = drivers[i % CONFIG.NUM_DRIVERS];
+      const driverStart = driverMarker.getLatLng();
+
+      let waypoints = [[driverStart.lat, driverStart.lng]];
+      
+      batch.forEach(order => {
+        const cook = cooks.find(c => c.id === order.cookId);
+        if (cook) {
+          waypoints.push([cook.lat, cook.lng]);
+          waypoints.push([order.lat, order.lng]);
+        }
+      });
+
+      try {
+        const routeInfo = await getMapboxRoute(waypoints, apiKey);
+        
+        const routeLine = L.polyline(routeInfo.path, {
+          color: "#10b981",
+          weight: 3,
+          opacity: 0.6
+        }).addTo(map);
+        
+        routeLines.push(routeLine);
+        
+        animateDriver(driverMarker, routeInfo.path, i + 1);
+        successfulRoutes++;
+        
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+      } catch (error) {
+        failedRoutes++;
+        logActivity(`Route ${i + 1} failed, using fallback`, "warning");
+        
+        // Fallback: straight lines
+        batch.forEach(order => {
+          const cook = cooks.find(c => c.id === order.cookId);
+          if (cook) {
+            const line = L.polyline([[cook.lat, cook.lng], [order.lat, order.lng]], {
+              color: "#ef4444",
+              weight: 2,
+              opacity: 0.3,
+              dashArray: '5, 10'
+            }).addTo(map);
+            routeLines.push(line);
+          }
+        });
+      }
+    }
+
+    logActivity(`✅ Simulation running: ${successfulRoutes} routes, ${failedRoutes} fallbacks`, "success");
+    
+  } catch (error) {
+    logActivity(`❌ Error: ${error.message}`, "error");
+    alert(`Simulation error: ${error.message}`);
+  } finally {
+    runBtn.disabled = false;
+    runBtn.textContent = "🚀 Run Live Dispatch";
+  }
+}
+
+// ============================================================================
+// INITIALIZE
+// ============================================================================
+window.addEventListener('load', () => {
+  initMap();
+  
+  // Add event listener for API key validation
+  const apiKeyInput = document.getElementById("mapbox-key");
+  if (apiKeyInput) {
+    apiKeyInput.addEventListener('input', validateApiKey);
+  }
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>RideNDine — Live Dispatch Dashboard (Mapbox Routing)</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: rgba(255,255,255,0.92);
+      --panel2: rgba(255,255,255,0.86);
+      --text: #0d1020;
+      --muted: rgba(13,16,32,0.65);
+      --ok: #14b86a;
+      --warn: #ffb020;
+      --bad: #ff3b30;
+      --accent: #5b7cfa;
+      --shadow: 0 18px 60px rgba(0,0,0,0.25);
+      --radius: 16px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    html, body { height: 100%; margin:0; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background: var(--bg); overflow:hidden; }
+
+    #map { height: 100%; width: 100%; }
+
+    .shell {
+      position: absolute; inset: 16px 16px auto 16px;
+      display: grid; gap: 12px;
+      grid-template-columns: 420px 1fr;
+      align-items: start;
+      z-index: 999;
+      pointer-events: none;
+    }
+    .card {
+      pointer-events: auto;
+      background: var(--panel);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+    .cardHeader {
+      padding: 14px 14px 10px 14px;
+      background: linear-gradient(180deg, rgba(91,124,250,0.12), rgba(91,124,250,0.00));
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .titleRow { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .title { font-weight: 800; letter-spacing: -0.02em; color: var(--text); font-size: 18px; }
+    .sub { margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 1.25; }
+    .pill {
+      font-size: 12px; font-weight: 700;
+      padding: 6px 10px; border-radius: 999px;
+      background: rgba(0,0,0,0.06); color: rgba(0,0,0,0.75);
+      white-space: nowrap;
+    }
+    .body { padding: 12px 14px 14px 14px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .metric { background: var(--panel2); border-radius: 14px; padding: 10px 10px; border: 1px solid rgba(0,0,0,0.06); }
+    .metric .k { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .metric .v { margin-top: 4px; font-size: 18px; font-weight: 900; letter-spacing: -0.02em; color: var(--text); }
+    .metric .s { margin-top: 2px; font-size: 12px; color: var(--muted); }
+
+    .row { display:flex; gap:10px; align-items:center; }
+    .row > * { flex: 1; }
+
+    .label { font-size: 12px; color: rgba(0,0,0,0.70); font-weight: 800; margin: 10px 0 6px 0; }
+    input[type="text"] {
+      width: 100%; padding: 10px 10px;
+      border-radius: 12px; border: 1px solid rgba(0,0,0,0.16);
+      outline: none; font-family: var(--mono); font-size: 12px;
+      box-sizing: border-box; background: rgba(255,255,255,0.95);
+    }
+    .btn {
+      width: 100%; border: none; border-radius: 14px;
+      padding: 12px 12px; font-weight: 900; cursor: pointer;
+      transition: transform .05s ease, filter .12s ease;
+    }
+    .btn:active { transform: scale(0.99); }
+    .btnPrimary { background: var(--accent); color: white; }
+    .btnGhost { background: rgba(0,0,0,0.06); color: rgba(0,0,0,0.78); }
+
+    .hint { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.3; }
+
+    .log { max-height: 260px; overflow: auto; padding: 10px 12px 12px 12px; background: rgba(255,255,255,0.90); }
+    .logItem { padding: 10px 10px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); background: rgba(255,255,255,0.86); margin-bottom: 8px; }
+    .logItem .t { font-size: 12px; font-weight: 900; color: rgba(0,0,0,0.80); }
+    .logItem .m { margin-top: 4px; font-size: 12px; color: rgba(0,0,0,0.72); line-height: 1.25; }
+    .tag {
+      display:inline-flex; align-items:center; gap:6px;
+      font-size: 11px; font-weight: 900;
+      padding: 4px 8px; border-radius: 999px;
+      margin-left: 8px; border: 1px solid rgba(0,0,0,0.06);
+    }
+    .tag.ok { background: rgba(20,184,106,0.18); color: #0b5a33; }
+    .tag.warn { background: rgba(255,176,32,0.20); color: #6b3f00; }
+    .tag.bad { background: rgba(255,59,48,0.18); color: #7a0f0a; }
+
+    @media (max-width: 980px) {
+      .shell { grid-template-columns: 1fr; inset: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="shell">
+    <div class="card">
+      <div class="cardHeader">
+        <div class="titleRow">
+          <div>
+            <div class="title">RideNDine — Live Dispatch</div>
+            <div class="sub">Hamilton • Eastgate Square • Real Mapbox street routing + SLA tracking</div>
+          </div>
+          <div class="pill" id="simState">Idle</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="grid">
+          <div class="metric">
+            <div class="k">Orders</div>
+            <div class="v" id="mOrders">0</div>
+            <div class="s" id="mBatches">0 batches</div>
+          </div>
+          <div class="metric">
+            <div class="k">Drivers</div>
+            <div class="v" id="mDrivers">0</div>
+            <div class="s" id="mActive">0 active</div>
+          </div>
+          <div class="metric">
+            <div class="k">On-Time</div>
+            <div class="v" id="mOnTime">0%</div>
+            <div class="s" id="mAtRisk">0 at-risk</div>
+          </div>
+          <div class="metric">
+            <div class="k">Late</div>
+            <div class="v" id="mLate">0</div>
+            <div class="s" id="mComplete">0 completed</div>
+          </div>
+        </div>
+
+        <div class="label">Mapbox API Token</div>
+        <input id="token" type="text" spellcheck="false" value="pk.eyJ1Ijoic2VhbmZpbiIsImEiOiJjbWt5a2JqeGUwOGk3M2NvaDR5emppbzV2In0.cPvOgWUfy2z9f34w8ymDLA" />
+
+        <div class="row" style="margin-top:10px;">
+          <button class="btn btnPrimary" id="btnRun">🚀 Run Live Dispatch</button>
+          <button class="btn btnGhost" id="btnClear">🧹 Clear</button>
+        </div>
+
+        <div class="hint">
+          Smart features enabled: <b>10 cooks → 200 orders → 20 drivers</b>, batched routes (max 4 orders/batch),
+          animated movement along real roads, interactive order popups. SLA: <b>45 minutes</b>.
+        </div>
+      </div>
+
+      <div class="cardHeader" style="border-top:1px solid rgba(0,0,0,0.08);">
+        <div class="titleRow">
+          <div class="title" style="font-size:14px;">Activity Log</div>
+          <div class="pill" style="font-family:var(--mono); font-size:11px;" id="clock">--:--:--</div>
+        </div>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+<script>
+(function() {
+  // ====== MAP SETUP ======
+  const eastgate = [43.2207, -79.7651];
+  const map = L.map("map", { zoomControl: true }).setView(eastgate, 12);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors"
+  }).addTo(map);
+
+  // ====== CONFIG ======
+  const SLA_MINUTES = 45;
+  const NUM_COOKS = 10;
+  const ORDERS_PER_COOK = 20;  // 10*20 = 200
+  const NUM_DRIVERS = 20;
+  const MAX_BATCH = 4;
+
+  // Animation time scaling: higher = faster sim
+  const REAL_SECONDS_PER_SIM_SECOND = 75; // 1 sim-second = 75 real seconds of route time
+  const ANIMATION_TICK_MS = 400;
+
+  // ====== STATE ======
+  let cookMarkers = [];
+  let customerMarkers = [];
+  let driverMarkers = [];
+  let routeLines = [];
+  let timers = [];
+  let driverRuns = []; // per driver assignment run
+
+  function nowStr() {
+    return new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  }
+
+  function setState(text) {
+    document.getElementById("simState").textContent = text;
+  }
+
+  function log(message, level = "ok") {
+    const el = document.getElementById("log");
+    const item = document.createElement("div");
+    item.className = "logItem";
+    const tagCls = level === "bad" ? "bad" : (level === "warn" ? "warn" : "ok");
+    const tagText = level === "bad" ? "Error" : (level === "warn" ? "Warning" : "OK");
+    item.innerHTML = `
+      <div class="t">${nowStr()} <span class="tag ${tagCls}">${tagText}</span></div>
+      <div class="m">${message}</div>
+    `;
+    el.prepend(item);
+  }
+
+  function randomCoord(center, radiusKm) {
+    const r = radiusKm / 111; // approx degrees
+    const u = Math.random();
+    const v = Math.random();
+    const w = r * Math.sqrt(u);
+    const t = 2 * Math.PI * v;
+    const x = w * Math.cos(t);
+    const y = w * Math.sin(t);
+    return [center[0] + y, center[1] + x];
+  }
+
+  function clearAll() {
+    [...cookMarkers, ...customerMarkers, ...driverMarkers, ...routeLines].forEach(layer => {
+      try { map.removeLayer(layer); } catch (e) {}
+    });
+    timers.forEach(t => clearInterval(t));
+    cookMarkers = [];
+    customerMarkers = [];
+    driverMarkers = [];
+    routeLines = [];
+    timers = [];
+    driverRuns = [];
+    document.getElementById("log").innerHTML = "";
+    setState("Idle");
+    updateMetrics();
+  }
+
+  // ====== MAPBOX DIRECTIONS ======
+  async function getRouteGeoJSON(stopsLatLng, token) {
+    // stopsLatLng: array of [lat, lng]
+    const coords = stopsLatLng.map(p => `${p[1]},${p[0]}`).join(";");
+    const url =
+      `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}` +
+      `?geometries=geojson&overview=full&annotations=distance,duration&access_token=${encodeURIComponent(token)}`;
+
+    const res = await fetch(url);
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`Mapbox Directions error (${res.status}): ${txt.slice(0,180)}`);
+    }
+    const data = await res.json();
+    if (!data.routes || !data.routes.length) {
+      throw new Error("No route returned from Mapbox Directions API.");
+    }
+    return data.routes[0];
+  }
+
+  function toLatLngList(routeObj) {
+    // routeObj.geometry.coordinates is [[lng,lat],...]
+    return routeObj.geometry.coordinates.map(c => [c[1], c[0]]);
+  }
+
+  function createDriverIcon(color) {
+    return L.divIcon({
+      className: "",
+      html: `
+        <div style="
+          width: 16px; height: 16px;
+          border-radius: 999px;
+          background: ${color};
+          box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+          border: 2px solid rgba(255,255,255,0.85);
+        "></div>
+      `,
+      iconSize: [16,16],
+      iconAnchor: [8,8],
+    });
+  }
+
+  function statusFromElapsed(elapsedSec) {
+    const slaSec = SLA_MINUTES * 60;
+    if (elapsedSec <= slaSec * 0.8) return "On-Time";
+    if (elapsedSec <= slaSec) return "At-Risk";
+    return "Late";
+  }
+
+  function tagFromStatus(status) {
+    if (status === "On-Time") return "ok";
+    if (status === "At-Risk") return "warn";
+    return "bad";
+  }
+
+  function updateMetrics() {
+    const totalOrders = NUM_COOKS * ORDERS_PER_COOK;
+    const batches = Math.ceil(totalOrders / MAX_BATCH);
+
+    const active = driverRuns.filter(d => d.state === "active").length;
+    const complete = driverRuns.filter(d => d.state === "complete").length;
+
+    let onTime = 0, atRisk = 0, late = 0;
+    driverRuns.forEach(d => {
+      if (d.state === "complete") return;
+      if (d.state === "active") {
+        if (d.slaStatus === "On-Time") onTime++;
+        else if (d.slaStatus === "At-Risk") atRisk++;
+        else late++;
+      }
+    });
+
+    const denom = Math.max(1, active);
+    const pct = Math.round((onTime / denom) * 100);
+
+    document.getElementById("mOrders").textContent = totalOrders;
+    document.getElementById("mBatches").textContent = `${batches} batches`;
+
+    document.getElementById("mDrivers").textContent = NUM_DRIVERS;
+    document.getElementById("mActive").textContent = `${active} active`;
+
+    document.getElementById("mOnTime").textContent = `${pct}%`;
+    document.getElementById("mAtRisk").textContent = `${atRisk} at-risk`;
+
+    document.getElementById("mLate").textContent = late;
+    document.getElementById("mComplete").textContent = `${complete} completed`;
+  }
+
+  function startClock() {
+    setInterval(() => {
+      document.getElementById("clock").textContent = nowStr();
+    }, 250);
+  }
+
+  // ====== SIMULATION ======
+  async function runSimulation() {
+    clearAll();
+    setState("Starting…");
+
+    const tokenEl = document.getElementById("token");
+    const token = (tokenEl.value || "").trim();
+    if (!token.startsWith("pk.") && !token.startsWith("sk.")) {
+      log("Please paste a valid Mapbox token (starts with pk. or sk.).", "bad");
+      setState("Needs token");
+      return;
+    }
+    localStorage.setItem("ridendine_mapbox_token", token);
+
+    log("Generating cook locations…");
+    const cooks = [];
+    for (let i=0; i<NUM_COOKS; i++) {
+      const cook = randomCoord(eastgate, 8);
+      cooks.push(cook);
+      const marker = L.marker(cook).addTo(map).bindPopup(`<b>Cook #${i+1}</b>`);
+      cookMarkers.push(marker);
+    }
+
+    log("Generating customer orders (200)…");
+    const orders = [];
+    cooks.forEach((cook, ci) => {
+      for (let j=0; j<ORDERS_PER_COOK; j++) {
+        const customer = randomCoord(eastgate, 30);
+        orders.push({ id: `${ci+1}-${j+1}`, cook, customer });
+
+        const marker = L.circleMarker(customer, {
+          radius: 4, color: "#1e5eff", opacity: 0.7, fillOpacity: 0.25, weight: 2
+        }).addTo(map);
+
+        marker.bindPopup(`
+          <div style="min-width:220px">
+            <div style="font-weight:900; margin-bottom:6px;">Order #${ci+1}-${j+1}</div>
+            <div style="font-size:12px; color:rgba(0,0,0,0.72); line-height:1.35;">
+              Pickup: Cook #${ci+1}<br/>
+              SLA: ${SLA_MINUTES} minutes<br/>
+              Status updates live in the dashboard
+            </div>
+          </div>
+        `);
+
+        customerMarkers.push(marker);
+      }
+    });
+
+    log("Generating driver fleet (20)…");
+    const drivers = [];
+    for (let i=0; i<NUM_DRIVERS; i++) {
+      const start = randomCoord(eastgate, 10);
+      const marker = L.marker(start, { icon: createDriverIcon("#ff8a00") }).addTo(map);
+      marker.bindPopup(`<b>Driver #${i+1}</b><br/><span style="font-size:12px;color:rgba(0,0,0,0.7)">Awaiting assignment…</span>`);
+      drivers.push(marker);
+      driverMarkers.push(marker);
+    }
+
+    // Batch orders
+    const batches = [];
+    while (orders.length) batches.push(orders.splice(0, MAX_BATCH));
+    log(`Batched orders into ${batches.length} routes (max ${MAX_BATCH} orders per batch).`);
+
+    setState("Routing…");
+    updateMetrics();
+
+    // Route each batch (throttle to avoid hammering API)
+    const MAX_CONCURRENT = 3;
+    let idx = 0;
+
+    async function worker() {
+      while (idx < batches.length) {
+        const my = idx++;
+        const batch = batches[my];
+        const driverMarker = drivers[my % NUM_DRIVERS];
+
+        const driverId = (my % NUM_DRIVERS) + 1;
+        const run = {
+          driverId,
+          batchId: my+1,
+          state: "active",
+          startedAt: Date.now(),
+          durationSec: null,
+          distanceM: null,
+          slaStatus: "On-Time",
+          routeLatLng: [],
+          progressIdx: 0,
+          timer: null,
+        };
+        driverRuns.push(run);
+
+        try {
+          // Build stop list: driver start -> cook/customer pairs
+          const start = driverMarker.getLatLng();
+          const stops = [[start.lat, start.lng]];
+          batch.forEach(o => {
+            stops.push(o.cook);
+            stops.push(o.customer);
+          });
+
+          const route = await getRouteGeoJSON(stops, token);
+          run.durationSec = route.duration;
+          run.distanceM = route.distance;
+          run.routeLatLng = toLatLngList(route);
+
+          // Draw route line
+          const poly = L.polyline(run.routeLatLng, {
+            color: "#14b86a",
+            weight: 3,
+            opacity: 0.75
+          }).addTo(map);
+          routeLines.push(poly);
+
+          if (my < 2) {
+            try { map.fitBounds(poly.getBounds(), { padding: [30,30] }); } catch (e) {}
+          }
+
+          const etaMin = Math.round((run.durationSec/60));
+          driverMarker.bindPopup(`
+            <div style="min-width:240px">
+              <div style="font-weight:900; margin-bottom:6px;">Driver #${driverId}</div>
+              <div style="font-size:12px; color:rgba(0,0,0,0.75); line-height:1.4;">
+                Batch: #${run.batchId} • Stops: ${stops.length-1}<br/>
+                Distance: ${(run.distanceM/1000).toFixed(1)} km<br/>
+                ETA (real): ~${etaMin} min<br/>
+                SLA: ${SLA_MINUTES} min
+              </div>
+            </div>
+          `);
+
+          log(`Route built for Driver #${driverId} (Batch #${run.batchId}) — ${(run.distanceM/1000).toFixed(1)} km, ~${etaMin} min.`);
+
+          // Animate along the street geometry
+          run.progressIdx = 0;
+          run.timer = setInterval(() => {
+            if (!run.routeLatLng.length) return;
+
+            const elapsedRealSec = (Date.now() - run.startedAt) / 1000 * REAL_SECONDS_PER_SIM_SECOND;
+            run.slaStatus = statusFromElapsed(elapsedRealSec);
+
+            // Move driver: step based on real route duration
+            const step = Math.max(
+              1,
+              Math.round(REAL_SECONDS_PER_SIM_SECOND * (ANIMATION_TICK_MS/1000) * (run.routeLatLng.length / Math.max(1, run.durationSec)))
+            );
+            run.progressIdx = Math.min(run.routeLatLng.length-1, run.progressIdx + step);
+            driverMarker.setLatLng(run.routeLatLng[run.progressIdx]);
+
+            if (run.progressIdx >= run.routeLatLng.length - 1) {
+              clearInterval(run.timer);
+              run.state = "complete";
+              const elapsedMin = Math.round(elapsedRealSec/60);
+              const level = tagFromStatus(run.slaStatus);
+              log(`Driver #${driverId} completed Batch #${run.batchId} in ~${elapsedMin} simulated minutes. Status: <b>${run.slaStatus}</b>.`, level);
+              updateMetrics();
+            } else {
+              updateMetrics();
+            }
+          }, ANIMATION_TICK_MS);
+          timers.push(run.timer);
+
+        } catch (err) {
+          run.state = "error";
+          log(`Driver #${driverId} routing failed: ${err.message}`, "bad");
+        }
+      }
+    }
+
+    const workers = Array.from({length: MAX_CONCURRENT}, () => worker());
+    await Promise.all(workers);
+
+    setState("Running");
+    log("Live dispatch simulation started — drivers are moving on real roads.");
+  }
+
+  // ====== UI EVENTS ======
+  document.getElementById("btnRun").addEventListener("click", () => {
+    runSimulation().catch(e => {
+      log(e.message || "Unknown error", "bad");
+      setState("Error");
+    });
+  });
+  document.getElementById("btnClear").addEventListener("click", clearAll);
+
+  // Restore token
+  const saved = localStorage.getItem("ridendine_mapbox_token");
+  if (saved) document.getElementById("token").value = saved;
+
+  startClock();
+  updateMetrics();
+})();
+</script>
+</body>
+</html>

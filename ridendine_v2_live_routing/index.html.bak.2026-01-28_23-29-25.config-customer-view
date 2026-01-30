@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RideNDine V2 Live Routing Demo</title>
+  <meta charset="utf-8"/>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    body { margin:0; font-family: Arial; }
+    #map { height:100vh; }
+
+    .panel {
+      position:absolute;
+      top:15px; left:15px;
+      background:white;
+      padding:15px;
+      border-radius:12px;
+      width:360px;
+      z-index:999;
+      box-shadow:0 0 12px rgba(0,0,0,0.35);
+    }
+
+    button {
+      width:100%;
+      padding:10px;
+      margin-top:10px;
+      border:none;
+      border-radius:8px;
+      font-weight:bold;
+      cursor:pointer;
+    }
+
+    .run { background:#ff9800; }
+    .clear { background:#ddd; }
+
+    .small { font-size:13px; color:#333; }
+  </style>
+</head>
+
+<body>
+
+<div class="panel">
+  <h2>RideNDine V2 Live Dispatch</h2>
+  <p><b>Hamilton — Eastgate Square</b></p>
+
+  <div class="small">
+    ✅ Live driver movement simulation<br>
+    ✅ Batched routes + animation<br>
+    ✅ Ready for Mapbox/Google routing API upgrade
+  </div>
+
+  <div style="margin-top:10px;">
+    <label class="small"><b>Routing Provider</b></label><br>
+    <select id="routing-provider" style="width:100%;padding:8px;border-radius:8px;">
+      <option value="osrm">OSRM (demo)</option>
+      <option value="mapbox">Mapbox Directions</option>
+      <option value="google">Google Routes</option>
+    </select>
+  </div>
+
+  <label class="small" style="display:block;margin-top:10px;">
+    <input type="checkbox" id="street-routing" checked>
+    Use real street routing (via local server)
+  </label>
+
+  <button class="run" onclick="startLive()">Run Live Dispatch</button>
+  <button class="clear" onclick="stopLive()">Clear Map</button>
+
+  <p class="small" id="status"></p>
+</div>
+
+<div id="map"></div>
+
+<script>
+const eastgate = [43.2207, -79.7651];
+const map = L.map("map").setView(eastgate, 12);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors"
+}).addTo(map);
+
+let cookMarkers = [];
+let customerMarkers = [];
+let driverMarkers = [];
+let routeLines = [];
+let animations = [];
+let liveSocket = null;
+let driverById = new Map();
+let cookById = new Map();
+let customerById = new Map();
+let liveData = null;
+const MAX_BATCH = 4;
+const ROUTE_LINE_STYLE = { color:"green", weight:2, opacity:0.5 };
+
+function setStatus(text) {
+  document.getElementById("status").innerHTML = text;
+}
+
+function clearMap() {
+  [...cookMarkers, ...customerMarkers, ...driverMarkers, ...routeLines]
+    .forEach(item => map.removeLayer(item));
+
+  animations.forEach(anim => clearInterval(anim));
+
+  cookMarkers = [];
+  customerMarkers = [];
+  driverMarkers = [];
+  routeLines = [];
+  animations = [];
+  driverById.clear();
+  cookById.clear();
+  customerById.clear();
+  liveData = null;
+  setStatus("");
+}
+
+function stopLive() {
+  if (liveSocket) {
+    liveSocket.close();
+    liveSocket = null;
+  }
+  clearMap();
+}
+
+function startLive() {
+  clearMap();
+  setStatus("Connecting to live GPS feed...");
+
+  if (liveSocket) {
+    liveSocket.close();
+  }
+
+  const wsUrl = "ws://localhost:8080";
+  liveSocket = new WebSocket(wsUrl);
+
+  liveSocket.onopen = () => {
+    setStatus("Connected. Waiting for live dispatch data...");
+  };
+
+  liveSocket.onmessage = (event) => {
+    let message;
+    try {
+      message = JSON.parse(event.data);
+    } catch (err) {
+      return;
+    }
+
+    if (message.type === "init") {
+      renderInit(message.data);
+      drawRoutes();
+      setStatus("✅ Live dispatch running: real-time driver GPS every 5s.");
+    }
+
+    if (message.type === "locations") {
+      updateDrivers(message.data.drivers);
+    }
+  };
+
+  liveSocket.onerror = () => {
+    setStatus("❌ Live feed error. Is the server running?");
+  };
+
+  liveSocket.onclose = () => {
+    setStatus("Disconnected from live feed.");
+  };
+}
+
+function renderInit(data) {
+  liveData = data;
+  data.cooks.forEach((cook) => {
+    const marker = L.marker([cook.lat, cook.lng]).addTo(map)
+      .bindPopup("Cook #" + cook.id);
+    cookMarkers.push(marker);
+    cookById.set(cook.id, cook);
+  });
+
+  data.customers.forEach((customer) => {
+    const marker = L.circleMarker([customer.lat, customer.lng], {
+      radius:4,
+      color:"blue",
+      opacity:0.5
+    }).addTo(map);
+    customerMarkers.push(marker);
+    customerById.set(customer.id, customer);
+  });
+
+  data.drivers.forEach((driver) => {
+    const marker = L.circleMarker([driver.lat, driver.lng], {
+      radius:8,
+      color:"orange",
+      fillColor:"orange",
+      fillOpacity:1
+    }).addTo(map)
+      .bindPopup("Driver #" + driver.id);
+    driverMarkers.push(marker);
+    driverById.set(driver.id, marker);
+  });
+
+  data.orders.forEach((order) => {
+    const cook = cookById.get(order.cookId);
+    const customer = customerById.get(order.customerId);
+    if (!cook || !customer) return;
+
+    const line = L.polyline([[cook.lat, cook.lng], [customer.lat, customer.lng]], ROUTE_LINE_STYLE).addTo(map);
+    routeLines.push(line);
+  });
+}
+
+function updateDrivers(drivers) {
+  drivers.forEach((driver) => {
+    const marker = driverById.get(driver.id);
+    if (!marker) return;
+    marker.setLatLng([driver.lat, driver.lng]);
+  });
+}
+
+function buildBatches() {
+  if (!liveData) return [];
+  const byDriver = new Map();
+  liveData.orders.forEach((order) => {
+    if (!byDriver.has(order.driverId)) byDriver.set(order.driverId, []);
+    byDriver.get(order.driverId).push(order);
+  });
+
+  const batches = [];
+  byDriver.forEach((orders, driverId) => {
+    for (let i = 0; i < orders.length; i += MAX_BATCH) {
+      batches.push({ driverId, orders: orders.slice(i, i + MAX_BATCH) });
+    }
+  });
+
+  return batches;
+}
+
+async function drawRoutes() {
+  if (!liveData) return;
+
+  const useStreet = document.getElementById("street-routing").checked;
+  const provider = document.getElementById("routing-provider").value;
+  const batches = buildBatches();
+
+  if (!useStreet) {
+    return;
+  }
+
+  // Remove straight-line routes, replace with street routing
+  routeLines.forEach(line => map.removeLayer(line));
+  routeLines = [];
+
+  for (let i = 0; i < batches.length; i += 1) {
+    const batch = batches[i];
+    const driverMarker = driverById.get(batch.driverId);
+    if (!driverMarker) continue;
+
+    const coords = [driverMarker.getLatLng()];
+    batch.orders.forEach((order) => {
+      const cook = cookById.get(order.cookId);
+      const customer = customerById.get(order.customerId);
+      if (!cook || !customer) return;
+      coords.push({ lat: cook.lat, lng: cook.lng });
+      coords.push({ lat: customer.lat, lng: customer.lng });
+    });
+
+    try {
+      const route = await requestRoute(provider, coords);
+      if (!route || !route.geometry || route.geometry.length < 2) {
+        drawStraightBatch(coords);
+        continue;
+      }
+      const line = L.polyline(route.geometry, ROUTE_LINE_STYLE).addTo(map);
+      routeLines.push(line);
+    } catch (err) {
+      drawStraightBatch(coords);
+    }
+  }
+}
+
+function drawStraightBatch(coords) {
+  for (let i = 1; i < coords.length; i += 1) {
+    const a = coords[i - 1];
+    const b = coords[i];
+    const line = L.polyline([[a.lat, a.lng], [b.lat, b.lng]], ROUTE_LINE_STYLE).addTo(map);
+    routeLines.push(line);
+  }
+}
+
+async function requestRoute(provider, coords) {
+  const body = {
+    provider,
+    coordinates: coords.map(c => ({ lat: c.lat, lng: c.lng })),
+    profile: "driving",
+  };
+
+  const response = await fetch("http://localhost:8080/api/route", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
+}
+</script>
+
+</body>
+</html>

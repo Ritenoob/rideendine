@@ -1,0 +1,145 @@
+const http = require("http");
+const crypto = require("crypto");
+
+const PORT = 8080;
+const EASTGATE = { lat: 43.2207, lng: -79.7651 };
+const UPDATE_MS = 5000;
+
+const NUM_COOKS = 10;
+const ORDERS_PER_COOK = 20;
+const NUM_DRIVERS = 20;
+
+function randomCoord(center, radiusKm) {
+  const r = radiusKm / 111;
+  const u = Math.random();
+  const v = Math.random();
+  const w = r * Math.sqrt(u);
+  const t = 2 * Math.PI * v;
+  const x = w * Math.cos(t);
+  const y = w * Math.sin(t);
+  return { lat: center.lat + y, lng: center.lng + x };
+}
+
+function makeId() {
+  return crypto.randomBytes(4).toString("hex");
+}
+
+const cooks = [];
+for (let i = 0; i < NUM_COOKS; i += 1) {
+  cooks.push({ id: makeId(), ...randomCoord(EASTGATE, 8) });
+}
+
+const customers = [];
+const orders = [];
+for (let i = 0; i < cooks.length; i += 1) {
+  for (let j = 0; j < ORDERS_PER_COOK; j += 1) {
+    const customer = { id: makeId(), ...randomCoord(EASTGATE, 30) };
+    customers.push(customer);
+    orders.push({
+      id: makeId(),
+      cookId: cooks[i].id,
+      customerId: customer.id,
+      driverId: null,
+    });
+  }
+}
+
+const drivers = [];
+for (let i = 0; i < NUM_DRIVERS; i += 1) {
+  drivers.push({ id: makeId(), ...randomCoord(EASTGATE, 10) });
+}
+
+for (let i = 0; i < orders.length; i += 1) {
+  orders[i].driverId = drivers[i % drivers.length].id;
+}
+
+function jitterLocation(driver) {
+  const deltaLat = (Math.random() - 0.5) * 0.0025;
+  const deltaLng = (Math.random() - 0.5) * 0.0025;
+  driver.lat += deltaLat;
+  driver.lng += deltaLng;
+}
+
+function makeInitPayload() {
+  return {
+    type: "init",
+    data: {
+      cooks,
+      customers,
+      orders,
+      drivers,
+    },
+  };
+}
+
+function makeLocationPayload() {
+  return {
+    type: "locations",
+    data: {
+      drivers: drivers.map((d) => ({ id: d.id, lat: d.lat, lng: d.lng })),
+    },
+  };
+}
+
+function acceptWebSocket(req, socket, head) {
+  const key = req.headers["sec-websocket-key"];
+  if (!key) {
+    socket.destroy();
+    return;
+  }
+
+  const acceptKey = crypto
+    .createHash("sha1")
+    .update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+    .digest("base64");
+
+  socket.write(
+    [
+      "HTTP/1.1 101 Switching Protocols",
+      "Upgrade: websocket",
+      "Connection: Upgrade",
+      `Sec-WebSocket-Accept: ${acceptKey}`,
+      "\r\n",
+    ].join("\r\n")
+  );
+
+  socket.write(encodeFrame(JSON.stringify(makeInitPayload())));
+
+  const interval = setInterval(() => {
+    drivers.forEach(jitterLocation);
+    socket.write(encodeFrame(JSON.stringify(makeLocationPayload())));
+  }, UPDATE_MS);
+
+  socket.on("close", () => clearInterval(interval));
+  socket.on("error", () => clearInterval(interval));
+}
+
+function encodeFrame(data) {
+  const payload = Buffer.from(data);
+  const length = payload.length;
+
+  if (length < 126) {
+    return Buffer.concat([Buffer.from([0x81, length]), payload]);
+  }
+
+  if (length < 65536) {
+    const header = Buffer.from([0x81, 126, length >> 8, length & 0xff]);
+    return Buffer.concat([header, payload]);
+  }
+
+  const header = Buffer.from([0x81, 127, 0, 0, 0, 0, 0, 0, (length >> 8) & 0xff, length & 0xff]);
+  return Buffer.concat([header, payload]);
+}
+
+const server = http.createServer((_, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("RideNDine live GPS demo server\n");
+});
+
+server.on("upgrade", (req, socket, head) => {
+  acceptWebSocket(req, socket, head);
+});
+
+server.listen(PORT, () => {
+  console.log(`Live GPS demo server running on ws://localhost:${PORT}`);
+});

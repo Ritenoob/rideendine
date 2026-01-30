@@ -1,0 +1,411 @@
+const http = require("http");
+const https = require("https");
+const crypto = require("crypto");
+const { URL } = require("url");
+
+const PORT = 8080;
+const EASTGATE = { lat: 43.2207, lng: -79.7651 };
+const UPDATE_MS = 5000;
+
+const NUM_COOKS = 10;
+const ORDERS_PER_COOK = 20;
+const NUM_DRIVERS = 20;
+const DEFAULT_OSRM = "https://router.project-osrm.org";
+const DEFAULT_PROVIDER = process.env.ROUTING_PROVIDER_DEFAULT || "osrm";
+const ROUTING_SERVER_NAME = process.env.ROUTING_SERVER_NAME || "RideNDine Demo Routing";
+const START_TIME = Date.now();
+const STATUS_FLOW = [
+  { name: "accepted", seconds: 120 },
+  { name: "preparing", seconds: 300 },
+  { name: "ready", seconds: 120 },
+  { name: "picked_up", seconds: 60 },
+  { name: "delivering", seconds: 600 },
+  { name: "delivered", seconds: 3600 },
+];
+
+function randomCoord(center, radiusKm) {
+  const r = radiusKm / 111;
+  const u = Math.random();
+  const v = Math.random();
+  const w = r * Math.sqrt(u);
+  const t = 2 * Math.PI * v;
+  const x = w * Math.cos(t);
+  const y = w * Math.sin(t);
+  return { lat: center.lat + y, lng: center.lng + x };
+}
+
+function makeId() {
+  return crypto.randomBytes(4).toString("hex");
+}
+
+const cooks = [];
+for (let i = 0; i < NUM_COOKS; i += 1) {
+  cooks.push({ id: makeId(), ...randomCoord(EASTGATE, 8) });
+}
+
+const customers = [];
+const orders = [];
+for (let i = 0; i < cooks.length; i += 1) {
+  for (let j = 0; j < ORDERS_PER_COOK; j += 1) {
+    const customer = { id: makeId(), ...randomCoord(EASTGATE, 30) };
+    customers.push(customer);
+    orders.push({
+      id: makeId(),
+      cookId: cooks[i].id,
+      customerId: customer.id,
+      driverId: null,
+    });
+  }
+}
+
+const drivers = [];
+for (let i = 0; i < NUM_DRIVERS; i += 1) {
+  drivers.push({ id: makeId(), ...randomCoord(EASTGATE, 10) });
+}
+
+for (let i = 0; i < orders.length; i += 1) {
+  orders[i].driverId = drivers[i % drivers.length].id;
+  orders[i].status = "accepted";
+}
+
+function jitterLocation(driver) {
+  const deltaLat = (Math.random() - 0.5) * 0.0025;
+  const deltaLng = (Math.random() - 0.5) * 0.0025;
+  driver.lat += deltaLat;
+  driver.lng += deltaLng;
+}
+
+function makeInitPayload() {
+  updateOrderStatuses();
+  return {
+    type: "init",
+    data: {
+      cooks,
+      customers,
+      orders,
+      drivers,
+    },
+  };
+}
+
+function makeLocationPayload() {
+  updateOrderStatuses();
+  return {
+    type: "locations",
+    data: {
+      drivers: drivers.map((d) => ({ id: d.id, lat: d.lat, lng: d.lng })),
+      orders: orders.map((o) => ({ id: o.id, status: o.status })),
+    },
+  };
+}
+
+function updateOrderStatuses() {
+  const elapsed = Math.floor((Date.now() - START_TIME) / 1000);
+  orders.forEach((order, index) => {
+    const offset = (index * 7) % 300;
+    let cursor = elapsed + offset;
+    for (let i = 0; i < STATUS_FLOW.length; i += 1) {
+      const step = STATUS_FLOW[i];
+      if (cursor <= step.seconds) {
+        order.status = step.name;
+        return;
+      }
+      cursor -= step.seconds;
+    }
+    order.status = "delivered";
+  });
+}
+
+function decodePolyline(encoded) {
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  const coordinates = [];
+
+  while (index < encoded.length) {
+    let result = 0;
+    let shift = 0;
+    let byte;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    const deltaLat = (result & 1) ? ~(result >> 1) : result >> 1;
+    lat += deltaLat;
+
+    result = 0;
+    shift = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    const deltaLng = (result & 1) ? ~(result >> 1) : result >> 1;
+    lng += deltaLng;
+
+    coordinates.push([lat / 1e5, lng / 1e5]);
+  }
+
+  return coordinates;
+}
+
+function requestJson(urlString, options = {}) {
+  const url = new URL(urlString);
+  const transport = url.protocol === "https:" ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const req = transport.request(
+      url,
+      {
+        method: options.method || "GET",
+        headers: options.headers || {},
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => {
+          data += chunk;
+        });
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 400) {
+            return reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+          }
+          try {
+            resolve(JSON.parse(data));
+          } catch (err) {
+            reject(err);
+          }
+        });
+      }
+    );
+
+    req.on("error", reject);
+    if (options.body) {
+      req.write(options.body);
+    }
+    req.end();
+  });
+}
+
+function normalizeCoords(coords) {
+  return coords.map((c) => ({ lat: c.lat, lng: c.lng }));
+}
+
+async function routeWithMapbox(coords, profile) {
+  const token = process.env.MAPBOX_TOKEN;
+  if (!token) throw new Error("MAPBOX_TOKEN not set");
+  const coordString = coords.map((c) => `${c.lng},${c.lat}`).join(";");
+  const url =
+    `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordString}` +
+    `?geometries=geojson&overview=full&access_token=${token}`;
+  const json = await requestJson(url);
+  const route = json.routes && json.routes[0];
+  if (!route) throw new Error("Mapbox: no routes");
+  return {
+    provider: "mapbox",
+    distanceMeters: route.distance,
+    durationSeconds: route.duration,
+    geometry: route.geometry.coordinates.map((c) => [c[1], c[0]]),
+  };
+}
+
+async function routeWithOsrm(coords, profile) {
+  const base = process.env.OSRM_BASE_URL || DEFAULT_OSRM;
+  const coordString = coords.map((c) => `${c.lng},${c.lat}`).join(";");
+  const url =
+    `${base}/route/v1/${profile}/${coordString}` +
+    "?geometries=geojson&overview=full";
+  const json = await requestJson(url);
+  const route = json.routes && json.routes[0];
+  if (!route) throw new Error("OSRM: no routes");
+  return {
+    provider: "osrm",
+    distanceMeters: route.distance,
+    durationSeconds: route.duration,
+    geometry: route.geometry.coordinates.map((c) => [c[1], c[0]]),
+  };
+}
+
+async function routeWithGoogle(coords) {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) throw new Error("GOOGLE_MAPS_API_KEY not set");
+  if (coords.length < 2) throw new Error("Google: need at least 2 coordinates");
+
+  const origin = coords[0];
+  const destination = coords[coords.length - 1];
+  const intermediates = coords.slice(1, -1).map((c) => ({
+    location: { latLng: { latitude: c.lat, longitude: c.lng } },
+  }));
+
+  const body = JSON.stringify({
+    origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
+    destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
+    intermediates,
+    travelMode: "DRIVE",
+    routingPreference: "TRAFFIC_AWARE",
+    polylineQuality: "HIGH_QUALITY",
+  });
+
+  const json = await requestJson("https://routes.googleapis.com/directions/v2:computeRoutes", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline",
+    },
+    body,
+  });
+
+  const route = json.routes && json.routes[0];
+  if (!route || !route.polyline) throw new Error("Google: no routes");
+
+  const decoded = decodePolyline(route.polyline.encodedPolyline);
+  return {
+    provider: "google",
+    distanceMeters: route.distanceMeters,
+    durationSeconds: route.duration ? parseInt(route.duration.replace("s", ""), 10) : null,
+    geometry: decoded.map((c) => [c[0], c[1]]),
+  };
+}
+
+async function handleRouteRequest(req, res) {
+  let body = "";
+  req.on("data", (chunk) => {
+    body += chunk;
+  });
+  req.on("end", async () => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Content-Type", "application/json");
+
+    let payload;
+    try {
+      payload = JSON.parse(body);
+    } catch (err) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: "Invalid JSON body" }));
+      return;
+    }
+
+    const provider = payload.provider || DEFAULT_PROVIDER;
+    const profile = payload.profile || "driving";
+    const coords = normalizeCoords(payload.coordinates || []);
+
+    if (coords.length < 2) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: "At least 2 coordinates are required" }));
+      return;
+    }
+
+    try {
+      let route;
+      if (provider === "mapbox") {
+        route = await routeWithMapbox(coords, profile);
+      } else if (provider === "google") {
+        route = await routeWithGoogle(coords);
+      } else {
+        route = await routeWithOsrm(coords, profile);
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify(route));
+    } catch (err) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+}
+
+function acceptWebSocket(req, socket, head) {
+  const key = req.headers["sec-websocket-key"];
+  if (!key) {
+    socket.destroy();
+    return;
+  }
+
+  const acceptKey = crypto
+    .createHash("sha1")
+    .update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+    .digest("base64");
+
+  socket.write(
+    [
+      "HTTP/1.1 101 Switching Protocols",
+      "Upgrade: websocket",
+      "Connection: Upgrade",
+      `Sec-WebSocket-Accept: ${acceptKey}`,
+      "\r\n",
+    ].join("\r\n")
+  );
+
+  socket.write(encodeFrame(JSON.stringify(makeInitPayload())));
+
+  const interval = setInterval(() => {
+    drivers.forEach(jitterLocation);
+    socket.write(encodeFrame(JSON.stringify(makeLocationPayload())));
+  }, UPDATE_MS);
+
+  socket.on("close", () => clearInterval(interval));
+  socket.on("error", () => clearInterval(interval));
+}
+
+function encodeFrame(data) {
+  const payload = Buffer.from(data);
+  const length = payload.length;
+
+  if (length < 126) {
+    return Buffer.concat([Buffer.from([0x81, length]), payload]);
+  }
+
+  if (length < 65536) {
+    const header = Buffer.from([0x81, 126, length >> 8, length & 0xff]);
+    return Buffer.concat([header, payload]);
+  }
+
+  const header = Buffer.from([0x81, 127, 0, 0, 0, 0, 0, 0, (length >> 8) & 0xff, length & 0xff]);
+  return Buffer.concat([header, payload]);
+}
+
+const server = http.createServer((_, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS, GET");
+  if (_.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
+    });
+    res.end();
+    return;
+  }
+
+  if (_.method === "GET" && _.url === "/api/config") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        name: ROUTING_SERVER_NAME,
+        defaultProvider: DEFAULT_PROVIDER,
+        osrmBaseUrl: process.env.OSRM_BASE_URL || DEFAULT_OSRM,
+        mapboxEnabled: Boolean(process.env.MAPBOX_TOKEN),
+        googleEnabled: Boolean(process.env.GOOGLE_MAPS_API_KEY),
+      })
+    );
+    return;
+  }
+
+  if (_.method === "POST" && _.url === "/api/route") {
+    handleRouteRequest(_, res);
+    return;
+  }
+
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("RideNDine live GPS demo server\n");
+});
+
+server.on("upgrade", (req, socket, head) => {
+  acceptWebSocket(req, socket, head);
+});
+
+server.listen(PORT, () => {
+  console.log(`Live GPS demo server running on ws://localhost:${PORT}`);
+  console.log(`Routing proxy available at http://localhost:${PORT}/api/route`);
+});

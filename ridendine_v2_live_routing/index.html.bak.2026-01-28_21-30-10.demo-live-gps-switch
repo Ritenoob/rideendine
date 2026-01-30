@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RideNDine V2 Live Routing Demo</title>
+  <meta charset="utf-8"/>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    body { margin:0; font-family: Arial; }
+    #map { height:100vh; }
+
+    .panel {
+      position:absolute;
+      top:15px; left:15px;
+      background:white;
+      padding:15px;
+      border-radius:12px;
+      width:360px;
+      z-index:999;
+      box-shadow:0 0 12px rgba(0,0,0,0.35);
+    }
+
+    button {
+      width:100%;
+      padding:10px;
+      margin-top:10px;
+      border:none;
+      border-radius:8px;
+      font-weight:bold;
+      cursor:pointer;
+    }
+
+    .run { background:#ff9800; }
+    .clear { background:#ddd; }
+
+    .small { font-size:13px; color:#333; }
+  </style>
+</head>
+
+<body>
+
+<div class="panel">
+  <h2>RideNDine V2 Live Dispatch</h2>
+  <p><b>Hamilton — Eastgate Square</b></p>
+
+  <div class="small">
+    ✅ Live driver movement simulation<br>
+    ✅ Batched routes + animation<br>
+    ✅ Ready for Mapbox/Google routing API upgrade
+  </div>
+
+  <button class="run" onclick="runSimulation()">Run Live Dispatch</button>
+  <button class="clear" onclick="clearMap()">Clear Map</button>
+
+  <p class="small" id="status"></p>
+</div>
+
+<div id="map"></div>
+
+<script>
+const eastgate = [43.2207, -79.7651];
+const map = L.map("map").setView(eastgate, 12);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors"
+}).addTo(map);
+
+const NUM_COOKS = 10;
+const ORDERS_PER_COOK = 20;
+const NUM_DRIVERS = 20;
+const MAX_BATCH = 4;
+
+let cookMarkers = [];
+let customerMarkers = [];
+let driverMarkers = [];
+let routeLines = [];
+let animations = [];
+
+function randomCoord(center, radiusKm) {
+  let r = radiusKm / 111;
+  let u = Math.random();
+  let v = Math.random();
+  let w = r * Math.sqrt(u);
+  let t = 2 * Math.PI * v;
+  let x = w * Math.cos(t);
+  let y = w * Math.sin(t);
+  return [center[0] + y, center[1] + x];
+}
+
+function clearMap() {
+  [...cookMarkers, ...customerMarkers, ...driverMarkers, ...routeLines]
+    .forEach(item => map.removeLayer(item));
+
+  animations.forEach(anim => clearInterval(anim));
+
+  cookMarkers = [];
+  customerMarkers = [];
+  driverMarkers = [];
+  routeLines = [];
+  animations = [];
+  document.getElementById("status").innerHTML = "";
+}
+
+function animateDriver(marker, path) {
+  let step = 0;
+  let interval = setInterval(() => {
+    if (step >= path.length) {
+      clearInterval(interval);
+      return;
+    }
+    marker.setLatLng(path[step]);
+    step++;
+  }, 500); // move every 0.5s
+
+  animations.push(interval);
+}
+
+function runSimulation() {
+
+  clearMap();
+  document.getElementById("status").innerHTML =
+    "Running live routing + driver movement...";
+
+  // 1) Generate cooks
+  let cooks = [];
+  for (let i=0; i<NUM_COOKS; i++) {
+    let cook = randomCoord(eastgate, 8);
+    cooks.push(cook);
+
+    let marker = L.marker(cook).addTo(map)
+      .bindPopup("Cook #" + (i+1));
+
+    cookMarkers.push(marker);
+  }
+
+  // 2) Generate customer orders
+  let orders = [];
+  cooks.forEach(cook => {
+    for (let j=0; j<ORDERS_PER_COOK; j++) {
+      let customer = randomCoord(eastgate, 30);
+
+      orders.push({ cook, customer });
+
+      let marker = L.circleMarker(customer, {
+        radius:4,
+        color:"blue",
+        opacity:0.5
+      }).addTo(map);
+
+      customerMarkers.push(marker);
+    }
+  });
+
+  // 3) Generate drivers
+  let drivers = [];
+  for (let i=0; i<NUM_DRIVERS; i++) {
+    let driverStart = randomCoord(eastgate, 10);
+
+    let marker = L.circleMarker(driverStart, {
+      radius:8,
+      color:"orange",
+      fillColor:"orange",
+      fillOpacity:1
+    }).addTo(map)
+      .bindPopup("Driver #" + (i+1));
+
+    drivers.push(marker);
+    driverMarkers.push(marker);
+  }
+
+  // 4) Batch orders
+  let batches = [];
+  while (orders.length > 0) {
+    batches.push(orders.splice(0, MAX_BATCH));
+  }
+
+  // 5) Assign + Draw + Animate
+  batches.forEach((batch, i) => {
+    let driverMarker = drivers[i % NUM_DRIVERS];
+
+    // Build route path: driver -> cook -> customer -> customer...
+    let path = [];
+    path.push(driverMarker.getLatLng());
+
+    batch.forEach(order => {
+      path.push(order.cook);
+      path.push(order.customer);
+
+      let line = L.polyline([order.cook, order.customer], {
+        color:"green",
+        weight:2,
+        opacity:0.4
+      }).addTo(map);
+
+      routeLines.push(line);
+    });
+
+    animateDriver(driverMarker, path);
+  });
+
+  document.getElementById("status").innerHTML =
+    "✅ Live dispatch running: drivers moving through batched routes.";
+}
+</script>
+
+</body>
+</html>

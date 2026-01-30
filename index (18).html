@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RideNDine V4 - Smart Grid Dispatch System</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      margin: 0; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f5f5f5;
+    }
+    
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* Dashboard Sidebar */
+    .dashboard {
+      width: 450px;
+      background: white;
+      overflow-y: auto;
+      box-shadow: 2px 0 12px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+
+    .dashboard-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 24px;
+    }
+
+    .dashboard-header h1 {
+      font-size: 24px;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .dashboard-header .subtitle {
+      opacity: 0.9;
+      font-size: 13px;
+    }
+
+    .dashboard-header .location {
+      margin-top: 8px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 20px;
+      background: #f8f9fa;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .stat-card.cooks .stat-value { color: #8b5cf6; }
+    .stat-card.pending .stat-value { color: #f59e0b; }
+    .stat-card.active .stat-value { color: #3b82f6; }
+    .stat-card.completed .stat-value { color: #10b981; }
+
+    /* Section */
+    .section {
+      padding: 20px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .section h3 {
+      font-size: 14px;
+      color: #374151;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    /* Grid Zone Controls */
+    .grid-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .grid-control {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .grid-control label {
+      font-size: 11px;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .grid-control input {
+      padding: 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .grid-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .grid-toggle input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .grid-toggle label {
+      font-size: 13px;
+      color: #374151;
+      cursor: pointer;
+    }
+
+    /* Cook Order Tracking */
+    .cook-orders {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .cook-card {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .cook-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .cook-name {
+      font-weight: 600;
+      color: #374151;
+      font-size: 13px;
+    }
+
+    .cook-status {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .cook-status.cooking { background: #fef3c7; color: #92400e; }
+    .cook-status.ready { background: #d1fae5; color: #065f46; }
+    .cook-status.idle { background: #e5e7eb; color: #6b7280; }
+
+    .dish-list {
+      margin-top: 8px;
+    }
+
+    .dish-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px;
+      background: white;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    .dish-name {
+      color: #374151;
+    }
+
+    .dish-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .dish-badge.preparing { background: #fef3c7; color: #92400e; }
+    .dish-badge.ready { background: #d1fae5; color: #065f46; }
+    .dish-badge.picked { background: #dbeafe; color: #1e40af; }
+    .dish-badge.delivered { background: #e5e7eb; color: #6b7280; }
+
+    /* Batch Queue */
+    .batch-queue {
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .batch-card {
+      background: white;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+
+    .batch-card.active {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+
+    .batch-card.completed {
+      border-color: #10b981;
+      opacity: 0.7;
+    }
+
+    .batch-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .batch-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: #374151;
+    }
+
+    .batch-time {
+      font-size: 11px;
+      color: #6b7280;
+    }
+
+    .batch-dishes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .mini-badge {
+      font-size: 10px;
+      padding: 3px 6px;
+      background: #f3f4f6;
+      border-radius: 4px;
+      color: #6b7280;
+    }
+
+    /* Buttons */
+    button.btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 10px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Activity Log */
+    .activity-log {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .log-item {
+      padding: 8px;
+      margin-bottom: 6px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .log-item.success { border-left: 3px solid #10b981; }
+    .log-item.warning { border-left: 3px solid #f59e0b; }
+    .log-item.error { border-left: 3px solid #ef4444; }
+    .log-item.info { border-left: 3px solid #3b82f6; }
+
+    .log-time {
+      color: #999;
+      font-size: 9px;
+      margin-top: 2px;
+    }
+
+    /* Map Container */
+    #map { 
+      flex: 1;
+      height: 100vh;
+    }
+
+    /* Grid Overlay */
+    .grid-label {
+      background: rgba(255, 255, 255, 0.9);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #374151;
+      border: 2px solid #3b82f6;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <div class="dashboard">
+    <div class="dashboard-header">
+      <h1>🍽️ RideNDine V4</h1>
+      <div class="subtitle">Smart Grid Dispatch + Order Tracking</div>
+      <div class="location">📍 Hamilton, Ontario</div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card cooks">
+        <div class="stat-label">Active Cooks</div>
+        <div class="stat-value" id="stat-cooks">0</div>
+      </div>
+      <div class="stat-card pending">
+        <div class="stat-label">Pending</div>
+        <div class="stat-value" id="stat-pending">0</div>
+      </div>
+      <div class="stat-card active">
+        <div class="stat-label">In Transit</div>
+        <div class="stat-value" id="stat-active">0</div>
+      </div>
+      <div class="stat-card completed">
+        <div class="stat-label">Completed</div>
+        <div class="stat-value" id="stat-completed">0</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>📐 Delivery Grid Zones</h3>
+      <div class="grid-controls">
+        <div class="grid-control">
+          <label>Max Radius (km)</label>
+          <input type="number" id="grid-radius" value="10" min="5" max="30">
+        </div>
+        <div class="grid-control">
+          <label>Grid Divisions</label>
+          <input type="number" id="grid-divisions" value="4" min="2" max="8">
+        </div>
+      </div>
+      <div class="grid-toggle">
+        <input type="checkbox" id="show-grid" checked>
+        <label for="show-grid">Show Grid Zones on Map</label>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>👨‍🍳 Cook Order Tracking</h3>
+      <div class="cook-orders" id="cook-orders"></div>
+    </div>
+
+    <div class="section">
+      <h3>📦 Staged Batch Queue</h3>
+      <div class="batch-queue" id="batch-queue"></div>
+    </div>
+
+    <div class="section">
+      <h3>🚗 Control Panel</h3>
+      <button class="btn btn-primary" onclick="startBusySchedule()" id="run-btn">
+        🚀 Start Busy Schedule
+      </button>
+      <button class="btn btn-secondary" onclick="loadSampleData()">
+        📍 Load Sample Data
+      </button>
+      <button class="btn btn-secondary" onclick="clearAll()">
+        🗑️ Clear Everything
+      </button>
+    </div>
+
+    <div class="section">
+      <h3>📊 Activity Log</h3>
+      <div class="activity-log" id="log-container"></div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<script>
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+const CONFIG = {
+  center: [43.2207, -79.7651],
+  zoom: 12,
+  
+  NUM_DRIVERS: 12,
+  MIN_DISHES_PER_BATCH: 2,
+  MAX_DISHES_PER_BATCH: 4,
+  
+  ANIMATION_SPEED_MS: 600,
+  BATCH_INTERVAL_MS: 15000, // New batch every 15 seconds
+  COOK_TIME_MS: 8000, // Dishes take 8 seconds to cook
+};
+
+// Menu Items
+const MENU_ITEMS = [
+  'Burger & Fries', 'Pizza Margherita', 'Caesar Salad', 'Chicken Wings',
+  'Pad Thai', 'Sushi Roll', 'BBQ Ribs', 'Fish & Chips', 'Poke Bowl',
+  'Butter Chicken', 'Pasta Carbonara', 'Tacos', 'Pho Bowl', 'Shawarma'
+];
+
+// Hamilton Restaurant Locations
+const HAMILTON_RESTAURANTS = [
+  { name: "Eastgate Pizza", lat: 43.2207, lng: -79.7651, address: "Eastgate Square" },
+  { name: "Lime Ridge Grill", lat: 43.2340, lng: -79.8598, address: "Lime Ridge Mall" },
+  { name: "Jackson Deli", lat: 43.2557, lng: -79.8711, address: "Jackson Square" },
+  { name: "Ancaster Bistro", lat: 43.2187, lng: -79.9886, address: "Wilson St" },
+  { name: "Westdale Cafe", lat: 43.2603, lng: -79.9019, address: "King St W" },
+  { name: "Barton Sushi", lat: 43.2468, lng: -79.7918, address: "Barton St E" },
+  { name: "Concession BBQ", lat: 43.2389, lng: -79.8142, address: "Concession St" },
+  { name: "Upper James", lat: 43.2156, lng: -79.8734, address: "Upper James" },
+];
+
+// ============================================================================
+// GLOBAL STATE
+// ============================================================================
+let map;
+let gridZones = [];
+let gridOverlays = [];
+
+let cooks = [];
+let orders = [];
+let batches = [];
+let drivers = [];
+
+let cookMarkers = [];
+let orderMarkers = [];
+let driverMarkers = [];
+let routeLines = [];
+let animations = [];
+
+let busyScheduleInterval = null;
+let orderIdCounter = 1;
+let batchIdCounter = 1;
+
+let stats = {
+  cooks: 0,
+  pending: 0,
+  active: 0,
+  completed: 0
+};
+
+// ============================================================================
+// MAP & GRID INITIALIZATION
+// ============================================================================
+function initMap() {
+  map = L.map("map").setView(CONFIG.center, CONFIG.zoom);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap"
+  }).addTo(map);
+
+  drawGrid();
+  logActivity("System initialized - Hamilton grid zones active", "success");
+}
+
+function drawGrid() {
+  // Clear existing grid
+  gridOverlays.forEach(overlay => map.removeLayer(overlay));
+  gridOverlays = [];
+  gridZones = [];
+
+  const showGrid = document.getElementById("show-grid").checked;
+  if (!showGrid) return;
+
+  const radius = parseFloat(document.getElementById("grid-radius").value);
+  const divisions = parseInt(document.getElementById("grid-divisions").value);
+
+  const radiusInDegrees = radius / 111;
+  const step = (radiusInDegrees * 2) / divisions;
+
+  const startLat = CONFIG.center[0] - radiusInDegrees;
+  const startLng = CONFIG.center[1] - radiusInDegrees;
+
+  let zoneId = 1;
+
+  for (let i = 0; i < divisions; i++) {
+    for (let j = 0; j < divisions; j++) {
+      const bounds = [
+        [startLat + i * step, startLng + j * step],
+        [startLat + (i + 1) * step, startLng + (j + 1) * step]
+      ];
+
+      const zoneName = `Zone ${String.fromCharCode(65 + i)}${j + 1}`;
+      
+      gridZones.push({
+        id: zoneId++,
+        name: zoneName,
+        bounds: bounds,
+        center: [
+          (bounds[0][0] + bounds[1][0]) / 2,
+          (bounds[0][1] + bounds[1][1]) / 2
+        ]
+      });
+
+      const rectangle = L.rectangle(bounds, {
+        color: '#3b82f6',
+        weight: 2,
+        fillOpacity: 0.05
+      }).addTo(map);
+
+      gridOverlays.push(rectangle);
+
+      const label = L.marker(
+        [(bounds[0][0] + bounds[1][0]) / 2, (bounds[0][1] + bounds[1][1]) / 2],
+        {
+          icon: L.divIcon({
+            className: 'grid-label',
+            html: zoneName,
+            iconSize: [60, 24]
+          })
+        }
+      ).addTo(map);
+
+      gridOverlays.push(label);
+    }
+  }
+
+  logActivity(`Grid updated: ${divisions}x${divisions} zones, ${radius}km radius`, "info");
+}
+
+// Event listeners for grid controls
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById("show-grid").addEventListener('change', drawGrid);
+  document.getElementById("grid-radius").addEventListener('change', drawGrid);
+  document.getElementById("grid-divisions").addEventListener('change', drawGrid);
+});
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+function randomInZone(zone) {
+  const latRange = zone.bounds[1][0] - zone.bounds[0][0];
+  const lngRange = zone.bounds[1][1] - zone.bounds[0][1];
+  
+  return [
+    zone.bounds[0][0] + Math.random() * latRange,
+    zone.bounds[0][1] + Math.random() * lngRange
+  ];
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+function logActivity(message, type = "info") {
+  const logContainer = document.getElementById("log-container");
+  const logItem = document.createElement("div");
+  logItem.className = `log-item ${type}`;
+  logItem.innerHTML = `
+    ${message}
+    <div class="log-time">${formatTime(new Date())}</div>
+  `;
+  
+  logContainer.insertBefore(logItem, logContainer.firstChild);
+  
+  while (logContainer.children.length > 20) {
+    logContainer.removeChild(logContainer.lastChild);
+  }
+}
+
+function updateStats() {
+  document.getElementById("stat-cooks").textContent = stats.cooks;
+  document.getElementById("stat-pending").textContent = stats.pending;
+  document.getElementById("stat-active").textContent = stats.active;
+  document.getElementById("stat-completed").textContent = stats.completed;
+}
+
+// ============================================================================
+// COOK & ORDER MANAGEMENT
+// ============================================================================
+function loadSampleData() {
+  clearAll();
+  
+  logActivity("Loading Hamilton restaurants...", "info");
+  
+  HAMILTON_RESTAURANTS.forEach((restaurant, idx) => {
+    const zone = gridZones[idx % gridZones.length];
+    
+    cooks.push({
+      id: Date.now() + idx,
+      name: restaurant.name,
+      lat: restaurant.lat,
+      lng: restaurant.lng,
+      address: restaurant.address,
+      zone: zone ? zone.name : 'N/A',
+      status: 'idle',
+      orders: []
+    });
+  });
+
+  stats.cooks = cooks.length;
+  updateStats();
+  renderCookOrders();
+  
+  // Place cook markers
+  cooks.forEach((cook, i) => {
+    const marker = L.marker([cook.lat, cook.lng], {
+      icon: L.divIcon({
+        html: '👨‍🍳',
+        className: '',
+        iconSize: [30, 30]
+      })
+    }).addTo(map).bindPopup(`
+      <b>🏪 ${cook.name}</b><br>
+      📍 ${cook.address}<br>
+      🗺️ ${cook.zone}
+    `);
+    
+    cookMarkers.push(marker);
+  });
+
+  logActivity(`✅ Loaded ${cooks.length} restaurants`, "success");
+}
+
+function createOrder(cook) {
+  const zone = gridZones.find(z => z.name === cook.zone) || gridZones[0];
+  const customerLocation = randomInZone(zone);
+  
+  const dishes = [];
+  const numDishes = Math.floor(Math.random() * (CONFIG.MAX_DISHES_PER_BATCH - CONFIG.MIN_DISHES_PER_BATCH + 1)) + CONFIG.MIN_DISHES_PER_BATCH;
+  
+  for (let i = 0; i < numDishes; i++) {
+    dishes.push({
+      id: Date.now() + Math.random(),
+      name: MENU_ITEMS[Math.floor(Math.random() * MENU_ITEMS.length)],
+      status: 'preparing',
+      preparedAt: null
+    });
+  }
+
+  const order = {
+    id: orderIdCounter++,
+    cookId: cook.id,
+    cookName: cook.name,
+    customerLat: customerLocation[0],
+    customerLng: customerLocation[1],
+    zone: zone.name,
+    dishes: dishes,
+    status: 'preparing',
+    createdAt: new Date()
+  };
+
+  orders.push(order);
+  cook.orders.push(order);
+  cook.status = 'cooking';
+
+  stats.pending++;
+  updateStats();
+
+  // Place customer marker
+  const marker = L.circleMarker(customerLocation, {
+    radius: 6,
+    color: "#f59e0b",
+    fillColor: "#f59e0b",
+    fillOpacity: 0.6,
+    weight: 2
+  }).addTo(map).bindPopup(`
+    <b>📦 Order #${order.id}</b><br>
+    From: ${cook.name}<br>
+    Zone: ${zone.name}<br>
+    Dishes: ${dishes.length}
+  `);
+
+  orderMarkers.push({ order: order, marker: marker });
+
+  // Simulate cooking time
+  setTimeout(() => {
+    order.status = 'ready';
+    order.dishes.forEach(dish => {
+      dish.status = 'ready';
+      dish.preparedAt = new Date();
+    });
+    
+    marker.setStyle({ color: "#10b981", fillColor: "#10b981" });
+    
+    logActivity(`✅ Order #${order.id} ready for pickup (${dishes.length} dishes)`, "success");
+    renderCookOrders();
+  }, CONFIG.COOK_TIME_MS);
+
+  renderCookOrders();
+  return order;
+}
+
+function renderCookOrders() {
+  const container = document.getElementById("cook-orders");
+  container.innerHTML = "";
+
+  cooks.forEach(cook => {
+    const card = document.createElement("div");
+    card.className = "cook-card";
+    
+    const activeOrders = cook.orders.filter(o => o.status !== 'delivered');
+    
+    card.innerHTML = `
+      <div class="cook-header">
+        <div class="cook-name">🏪 ${cook.name}</div>
+        <div class="cook-status ${cook.status}">${cook.status.toUpperCase()}</div>
+      </div>
+      <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;">
+        ${cook.zone} • ${activeOrders.length} active order(s)
+      </div>
+      <div class="dish-list">
+        ${activeOrders.map(order => `
+          <div style="margin-bottom: 8px;">
+            <div style="font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 4px;">
+              Order #${order.id}
+            </div>
+            ${order.dishes.map(dish => `
+              <div class="dish-item">
+                <span class="dish-name">${dish.name}</span>
+                <span class="dish-badge ${dish.status}">${dish.status}</span>
+              </div>
+            `).join('')}
+          </div>
+        `).join('')}
+      </div>
+    `;
+    
+    container.appendChild(card);
+  });
+}
+
+// ============================================================================
+// BATCH & DISPATCH SYSTEM
+// ============================================================================
+function createBatch() {
+  const readyOrders = orders.filter(o => o.status === 'ready');
+  
+  if (readyOrders.length === 0) return null;
+
+  const batchSize = Math.min(
+    Math.floor(Math.random() * (CONFIG.MAX_DISHES_PER_BATCH - CONFIG.MIN_DISHES_PER_BATCH + 1)) + CONFIG.MIN_DISHES_PER_BATCH,
+    readyOrders.length
+  );
+
+  const selectedOrders = readyOrders.slice(0, batchSize);
+
+  const batch = {
+    id: batchIdCounter++,
+    orders: selectedOrders,
+    status: 'pending',
+    createdAt: new Date(),
+    dispatchedAt: null,
+    completedAt: null
+  };
+
+  batches.push(batch);
+  
+  selectedOrders.forEach(order => {
+    order.status = 'batched';
+    order.dishes.forEach(dish => dish.status = 'picked');
+  });
+
+  renderBatchQueue();
+  renderCookOrders();
+  
+  return batch;
+}
+
+function dispatchBatch(batch) {
+  if (!batch || batch.status !== 'pending') return;
+
+  batch.status = 'active';
+  batch.dispatchedAt = new Date();
+
+  stats.pending -= batch.orders.length;
+  stats.active += batch.orders.length;
+  updateStats();
+
+  // Assign driver
+  const driverIdx = batches.indexOf(batch) % CONFIG.NUM_DRIVERS;
+  let driver = drivers[driverIdx];
+
+  if (!driver) {
+    const driverStart = randomInZone(gridZones[0]);
+    const marker = L.circleMarker(driverStart, {
+      radius: 10,
+      color: "#f97316",
+      fillColor: "#f97316",
+      fillOpacity: 1,
+      weight: 3
+    }).addTo(map).bindPopup(`
+      <b>🚗 Driver #${driverIdx + 1}</b><br>
+      Batch: #${batch.id}<br>
+      Orders: ${batch.orders.length}
+    `);
+
+    driver = { id: driverIdx + 1, marker: marker };
+    drivers.push(driver);
+    driverMarkers.push(marker);
+  }
+
+  logActivity(`🚗 Dispatching Batch #${batch.id} with ${batch.orders.length} orders`, "info");
+
+  // Build route
+  let waypoints = [[driver.marker.getLatLng().lat, driver.marker.getLatLng().lng]];
+  
+  batch.orders.forEach(order => {
+    const cook = cooks.find(c => c.id === order.cookId);
+    waypoints.push([cook.lat, cook.lng]);
+    waypoints.push([order.customerLat, order.customerLng]);
+  });
+
+  // Draw simple route
+  const routeLine = L.polyline(waypoints, {
+    color: "#10b981",
+    weight: 3,
+    opacity: 0.6
+  }).addTo(map);
+
+  routeLines.push(routeLine);
+
+  // Animate delivery
+  animateDelivery(driver.marker, waypoints, batch);
+
+  renderBatchQueue();
+}
+
+function animateDelivery(marker, path, batch) {
+  let step = 0;
+  
+  const interval = setInterval(() => {
+    if (step >= path.length) {
+      clearInterval(interval);
+      completeBatch(batch);
+      return;
+    }
+    
+    marker.setLatLng(path[step]);
+    step++;
+  }, CONFIG.ANIMATION_SPEED_MS);
+
+  animations.push(interval);
+}
+
+function completeBatch(batch) {
+  batch.status = 'completed';
+  batch.completedAt = new Date();
+
+  stats.active -= batch.orders.length;
+  stats.completed += batch.orders.length;
+  updateStats();
+
+  batch.orders.forEach(order => {
+    order.status = 'delivered';
+    order.dishes.forEach(dish => dish.status = 'delivered');
+    
+    const cook = cooks.find(c => c.id === order.cookId);
+    if (cook) {
+      cook.orders = cook.orders.filter(o => o.id !== order.id);
+      if (cook.orders.length === 0) {
+        cook.status = 'idle';
+      }
+    }
+
+    // Remove customer marker
+    const markerData = orderMarkers.find(m => m.order.id === order.id);
+    if (markerData) {
+      map.removeLayer(markerData.marker);
+    }
+  });
+
+  logActivity(`✅ Batch #${batch.id} completed (${batch.orders.length} orders delivered)`, "success");
+  
+  renderBatchQueue();
+  renderCookOrders();
+}
+
+function renderBatchQueue() {
+  const container = document.getElementById("batch-queue");
+  container.innerHTML = "";
+
+  const recentBatches = batches.slice(-10).reverse();
+
+  recentBatches.forEach(batch => {
+    const card = document.createElement("div");
+    card.className = `batch-card ${batch.status}`;
+    
+    const totalDishes = batch.orders.reduce((sum, o) => sum + o.dishes.length, 0);
+    
+    card.innerHTML = `
+      <div class="batch-header">
+        <div class="batch-title">🚚 Batch #${batch.id}</div>
+        <div class="batch-time">${formatTime(batch.createdAt)}</div>
+      </div>
+      <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">
+        ${batch.orders.length} orders • ${totalDishes} dishes • ${batch.status}
+      </div>
+      <div class="batch-dishes">
+        ${batch.orders.map(o => 
+          `<span class="mini-badge">Order #${o.id} (${o.dishes.length})</span>`
+        ).join('')}
+      </div>
+    `;
+    
+    container.appendChild(card);
+  });
+}
+
+// ============================================================================
+// BUSY SCHEDULE SYSTEM
+// ============================================================================
+function startBusySchedule() {
+  if (cooks.length === 0) {
+    alert("Please load sample data first!");
+    return;
+  }
+
+  const runBtn = document.getElementById("run-btn");
+  
+  if (busyScheduleInterval) {
+    clearInterval(busyScheduleInterval);
+    busyScheduleInterval = null;
+    runBtn.textContent = "🚀 Start Busy Schedule";
+    logActivity("Busy schedule stopped", "warning");
+    return;
+  }
+
+  runBtn.textContent = "⏸️ Pause Schedule";
+  logActivity("🔥 Busy schedule started - orders every 15s", "success");
+
+  // Immediate first wave
+  createOrderWave();
+
+  // Continue creating waves
+  busyScheduleInterval = setInterval(() => {
+    createOrderWave();
+    
+    // Try to create and dispatch batches
+    const batch = createBatch();
+    if (batch) {
+      setTimeout(() => dispatchBatch(batch), 2000);
+    }
+  }, CONFIG.BATCH_INTERVAL_MS);
+}
+
+function createOrderWave() {
+  const numOrders = Math.floor(Math.random() * 3) + 2; // 2-4 orders per wave
+  
+  for (let i = 0; i < numOrders; i++) {
+    const randomCook = cooks[Math.floor(Math.random() * cooks.length)];
+    createOrder(randomCook);
+  }
+  
+  logActivity(`📋 New order wave: ${numOrders} orders`, "info");
+}
+
+// ============================================================================
+// CLEAR FUNCTION
+// ============================================================================
+function clearAll() {
+  [...cookMarkers, ...orderMarkers.map(m => m.marker), ...driverMarkers, ...routeLines]
+    .forEach(item => map.removeLayer(item));
+
+  animations.forEach(anim => clearInterval(anim));
+  if (busyScheduleInterval) clearInterval(busyScheduleInterval);
+
+  cookMarkers = [];
+  orderMarkers = [];
+  driverMarkers = [];
+  routeLines = [];
+  animations = [];
+
+  cooks = [];
+  orders = [];
+  batches = [];
+  drivers = [];
+  
+  busyScheduleInterval = null;
+  orderIdCounter = 1;
+  batchIdCounter = 1;
+
+  stats = { cooks: 0, pending: 0, active: 0, completed: 0 };
+  updateStats();
+
+  renderCookOrders();
+  renderBatchQueue();
+
+  document.getElementById("run-btn").textContent = "🚀 Start Busy Schedule";
+  
+  logActivity("System cleared", "warning");
+}
+
+// ============================================================================
+// INITIALIZE
+// ============================================================================
+window.addEventListener('load', initMap);
+
+</script>
+
+</body>
+</html>

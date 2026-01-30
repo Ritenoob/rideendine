@@ -1,0 +1,70 @@
+# RideNDine
+
+RideNDine is a multi-role delivery platform demo with live routing, dispatch, pricing, reliability scoring, and customer tracking. This repo contains the V2 live routing demo plus scaffolded backend service split and customer apps (web + mobile).
+
+## Highlights
+- Live driver GPS feed (WebSocket)
+- Customer tracking (ETA + status timeline)
+- Server-side batching + route ordering
+- Dispatch engine + reliability scoring
+- Pricing + density controls
+- Alerts + summary metrics
+- Customer web + mobile scaffolds
+
+## Structure
+- `ridendine_v2_live_routing/` V2 live routing demo (core server + UI)
+- `services/` Service split scaffolds (api, routing, dispatch, realtime)
+- `apps/customer-web/` Simple customer web tracker (HTML)
+- `apps/customer-web-react/` React-based customer tracker
+- `apps/customer-mobile/` Expo/React Native customer app
+- `packages/api-client/` Shared SDK scaffold
+
+## Quick Start (Core Demo)
+Run the core demo server (single port):
+
+```
+nohup node ridendine_v2_live_routing/server.js >/tmp/ridendine_core.log 2>&1 &
+```
+
+Open:
+- `ridendine_v2_live_routing/index.html`
+
+Default server port: `8081` (see UI inputs).
+
+## Customer Web (React)
+Start a static server:
+
+```
+python3 -m http.server 8010 --directory apps/customer-web-react
+```
+
+Open:
+- `http://localhost:8010`
+
+## Customer Mobile (Expo)
+From `apps/customer-mobile`:
+
+```
+npm install
+npx expo start
+```
+
+Use server URL `http://<your-computer-ip>:8081` on device.
+
+## Service Split (Scaffold)
+The repo includes service scaffolds for production scale:
+
+- API: `services/api/server.js`
+- Dispatch: `services/dispatch/server.js`
+- Routing: `services/routing/server.js`
+- Realtime: `services/realtime/server.js`
+
+These are stubs or proxies and can be wired into a full production architecture behind a gateway.
+
+## Notes
+- The demo server includes auth, GPS ingestion, status updates, ETA, pricing, and alerts.
+- Use the UI inputs to switch provider endpoints.
+- For iOS/Android, use deep links: `ridendine://track?orderId=...`
+
+## License
+Proprietary / internal demo.

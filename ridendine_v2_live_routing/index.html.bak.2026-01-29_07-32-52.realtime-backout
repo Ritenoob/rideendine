@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RideNDine V2 Live Routing Demo</title>
+  <meta charset="utf-8"/>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    body { margin:0; font-family: Arial; }
+    #map { height:100vh; }
+
+    .panel {
+      position:absolute;
+      top:15px; left:15px;
+      background:white;
+      padding:15px;
+      border-radius:12px;
+      width:360px;
+      z-index:999;
+      box-shadow:0 0 12px rgba(0,0,0,0.35);
+    }
+
+    button {
+      width:100%;
+      padding:10px;
+      margin-top:10px;
+      border:none;
+      border-radius:8px;
+      font-weight:bold;
+      cursor:pointer;
+    }
+
+    .run { background:#ff9800; }
+    .clear { background:#ddd; }
+
+    .small { font-size:13px; color:#333; }
+    .timeline {
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      font-size:12px;
+      color:#333;
+    }
+    .timeline-item {
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .timeline-dot {
+      width:10px;
+      height:10px;
+      border-radius:999px;
+      background:#bbb;
+      flex-shrink:0;
+    }
+    .timeline-item.active .timeline-dot {
+      background:#ff9800;
+      box-shadow:0 0 6px rgba(255,152,0,0.8);
+    }
+    .timeline-item.done .timeline-dot {
+      background:#4caf50;
+    }
+    .timeline-label {
+      text-transform:capitalize;
+    }
+    .legend-row {
+      display:flex;
+      align-items:center;
+      gap:6px;
+      margin-top:4px;
+      font-size:12px;
+      color:#333;
+    }
+    .legend-swatch {
+      width:10px;
+      height:10px;
+      border-radius:50%;
+      display:inline-block;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="panel">
+  <h2>RideNDine V2 Live Dispatch</h2>
+  <p><b>Hamilton — Eastgate Square</b></p>
+
+  <div class="small">
+    ✅ Live driver movement simulation<br>
+    ✅ Batched routes + animation<br>
+    ✅ Ready for Mapbox/Google routing API upgrade
+  </div>
+
+  <div style="margin-top:10px;">
+    <label class="small"><b>Routing Provider</b></label><br>
+    <select id="routing-provider" style="width:100%;padding:8px;border-radius:8px;">
+      <option value="osrm">OSRM (demo)</option>
+      <option value="mapbox">Mapbox Directions</option>
+      <option value="google">Google Routes</option>
+    </select>
+  </div>
+
+  <div style="margin-top:10px;">
+    <label class="small"><b>Dispatch Service URL</b></label><br>
+    <input id="dispatch-server" value="http://localhost:9002" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;">
+  </div>
+
+  <div style="margin-top:10px;">
+    <label class="small"><b>Auth Role</b></label><br>
+    <select id="auth-role" style="width:100%;padding:8px;border-radius:8px;">
+      <option value="dispatch">Dispatch</option>
+      <option value="customer">Customer</option>
+      <option value="driver">Driver</option>
+    </select>
+  </div>
+
+  <div class="small" id="auth-note" style="margin-top:6px;"></div>
+
+  <label class="small" style="display:block;margin-top:10px;">
+    <input type="checkbox" id="street-routing" checked>
+    Use real street routing (via local server)
+  </label>
+
+  <div style="margin-top:10px;">
+    <label class="small"><b>Routing Server URL</b></label><br>
+    <input id="routing-server" value="http://localhost:9003" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;">
+  </div>
+
+  <div style="margin-top:10px;">
+    <label class="small"><b>Realtime Server URL</b></label><br>
+    <input id="realtime-server" value="http://localhost:9004" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;">
+  </div>
+
+  <div style="margin-top:10px;">
+    <label class="small"><b>View Mode</b></label><br>
+    <select id="view-mode" style="width:100%;padding:8px;border-radius:8px;">
+      <option value="dispatch">Dispatch View (All)</option>
+      <option value="customer">Customer View (Single Order)</option>
+      <option value="driver">Driver View (Single Driver)</option>
+    </select>
+  </div>
+
+  <div id="customer-view-controls" style="margin-top:10px;">
+    <label class="small"><b>Customer View Order</b></label><br>
+    <select id="customer-order" style="width:100%;padding:8px;border-radius:8px;">
+      <option value="">Select an Order</option>
+    </select>
+  </div>
+
+  <div id="driver-view-controls" style="margin-top:10px; display:none;">
+    <label class="small"><b>Driver View</b></label><br>
+    <select id="driver-select" style="width:100%;padding:8px;border-radius:8px;">
+      <option value="">Select a Driver</option>
+    </select>
+  </div>
+  <div class="small" id="customer-link" style="margin-top:6px;"></div>
+  <div class="small" id="eta-display" style="margin-top:6px;"></div>
+  <div class="small" id="status-display" style="margin-top:6px;"></div>
+  <div id="timeline" style="margin-top:8px;"></div>
+  <div class="small" id="legend" style="margin-top:8px;"></div>
+  <div id="gps-sim-controls" style="margin-top:10px; display:none;">
+    <label class="small"><b>Driver GPS Simulator</b></label><br>
+    <button class="run" onclick="startGpsSim()">Start GPS Updates</button>
+    <button class="clear" onclick="stopGpsSim()">Stop GPS Updates</button>
+  </div>
+  <div id="status-controls" style="margin-top:10px; display:none;">
+    <label class="small"><b>Order Status Control</b></label><br>
+    <select id="status-select" style="width:100%;padding:8px;border-radius:8px;">
+      <option value="accepted">Accepted</option>
+      <option value="preparing">Preparing</option>
+      <option value="ready">Ready</option>
+      <option value="picked_up">Picked Up</option>
+      <option value="delivering">Delivering</option>
+      <option value="delivered">Delivered</option>
+    </select>
+    <button class="run" onclick="pushStatusUpdate()">Update Status</button>
+  </div>
+  <div id="dispatch-controls" style="margin-top:10px;">
+    <label class="small"><b>Dispatch Engine</b></label><br>
+    <button class="run" onclick="runAssignments()">Run Assignments</button>
+  </div>
+  <div id="summary-card" style="margin-top:10px;">
+    <label class="small"><b>Live Summary</b></label>
+    <div class="small" id="summary-display" style="margin-top:6px;"></div>
+  </div>
+  <div class="small" id="pricing-display" style="margin-top:6px;"></div>
+  <div class="small" id="reliability-display" style="margin-top:6px;"></div>
+  <div class="small" id="alerts-display" style="margin-top:6px;"></div>
+
+  <button class="run" onclick="startLive()">Run Live Dispatch</button>
+  <button class="clear" onclick="stopLive()">Clear Map</button>
+
+  <p class="small" id="status"></p>
+</div>
+
+<div id="map"></div>
+
+<script>
+const eastgate = [43.2207, -79.7651];
+const map = L.map("map").setView(eastgate, 12);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors"
+}).addTo(map);
+
+let cookMarkers = [];
+let customerMarkers = [];
+let driverMarkers = [];
+let routeLines = [];
+let animations = [];
+let liveSocket = null;
+let driverById = new Map();
+let cookById = new Map();
+let customerById = new Map();
+let cookMarkerById = new Map();
+let customerMarkerById = new Map();
+let liveData = null;
+const MAX_BATCH = 4;
+const ROUTE_LINE_STYLE = { color:"green", weight:2, opacity:0.5 };
+const SETTINGS_KEY = "ridendine_live_settings";
+let lastEtaByBatch = new Map();
+const STATUS_STEPS = ["accepted", "preparing", "ready", "picked_up", "delivering", "delivered"];
+let lastRouteFilter = { mode: "dispatch", orderId: "", driverId: "" };
+let authToken = "";
+let gpsSimInterval = null;
+let etaPollInterval = null;
+let batchMap = new Map();
+let alertPollInterval = null;
+let driverScoreMap = new Map();
+let summaryPollInterval = null;
+
+function setStatus(text) {
+  document.getElementById("status").innerHTML = text;
+}
+
+function clearMap() {
+  [...cookMarkers, ...customerMarkers, ...driverMarkers, ...routeLines]
+    .forEach(item => map.removeLayer(item));
+
+  animations.forEach(anim => clearInterval(anim));
+
+  cookMarkers = [];
+  customerMarkers = [];
+  driverMarkers = [];
+  routeLines = [];
+  animations = [];
+  driverById.clear();
+  cookById.clear();
+  customerById.clear();
+  cookMarkerById.clear();
+  customerMarkerById.clear();
+  liveData = null;
+  lastEtaByBatch.clear();
+  lastRouteFilter = { mode: "dispatch", orderId: "", driverId: "" };
+  setStatus("");
+}
+
+function stopLive() {
+  if (liveSocket) {
+    liveSocket.close();
+    liveSocket = null;
+  }
+  stopGpsSim();
+  stopEtaPoll();
+  stopAlertPoll();
+  stopSummaryPoll();
+  clearMap();
+}
+
+async function startLive() {
+  clearMap();
+  setStatus("Connecting to live GPS feed...");
+
+  if (liveSocket) {
+    liveSocket.close();
+  }
+
+  applySettingsToUI();
+  await ensureAuthToken();
+  const baseUrl = getRealtimeServer();
+  const wsUrl = authToken ? `${baseUrl.replace(/^http/, "ws")}?token=${authToken}` : baseUrl.replace(/^http/, "ws");
+  liveSocket = new WebSocket(wsUrl);
+
+  liveSocket.onopen = () => {
+    setStatus("Connected. Waiting for live dispatch data...");
+  };
+
+  liveSocket.onmessage = (event) => {
+    let message;
+    try {
+      message = JSON.parse(event.data);
+    } catch (err) {
+      return;
+    }
+
+    if (message.type === "init") {
+      renderInit(message.data);
+      drawRoutes();
+      setStatus("✅ Live dispatch running: real-time driver GPS every 5s.");
+    }
+
+    if (message.type === "locations") {
+      updateDrivers(message.data.drivers);
+      updateOrderStatuses(message.data.orders || []);
+    }
+  };
+
+  liveSocket.onerror = () => {
+    setStatus("❌ Live feed error. Is the server running?");
+  };
+
+  liveSocket.onclose = () => {
+    setStatus("Disconnected from live feed.");
+  };
+}
+
+function renderInit(data) {
+  liveData = data;
+  populateCustomerOrders(data.orders);
+  populateDriverSelect(data.drivers);
+  renderLegend();
+  syncAuthRoleToViewMode();
+  storeBatches(data.batches || []);
+  storeDriverScores(data.driverScores || {});
+  updateReliabilityDisplay();
+  data.cooks.forEach((cook) => {
+    const marker = L.circleMarker([cook.lat, cook.lng], {
+      radius:7,
+      color:"#2e7d32",
+      fillColor:"#2e7d32",
+      fillOpacity:0.9,
+    }).addTo(map)
+      .bindPopup(`Cook #${cook.id}`);
+    cookMarkers.push(marker);
+    cookById.set(cook.id, cook);
+    cookMarkerById.set(cook.id, marker);
+  });
+
+  data.customers.forEach((customer) => {
+    const marker = L.circleMarker([customer.lat, customer.lng], {
+      radius:6,
+      color:"#1565c0",
+      fillColor:"#1565c0",
+      fillOpacity:0.8,
+    }).addTo(map);
+    customerMarkers.push(marker);
+    customerById.set(customer.id, customer);
+    customerMarkerById.set(customer.id, marker);
+  });
+
+  data.drivers.forEach((driver) => {
+    const marker = L.circleMarker([driver.lat, driver.lng], {
+      radius:9,
+      color:"#fb8c00",
+      fillColor:"#fb8c00",
+      fillOpacity:1
+    }).addTo(map)
+      .bindPopup(`Driver #${driver.id}`);
+    driverMarkers.push(marker);
+    driverById.set(driver.id, marker);
+  });
+
+  data.orders.forEach((order) => {
+    const cook = cookById.get(order.cookId);
+    const customer = customerById.get(order.customerId);
+    if (!cook || !customer) return;
+
+    const line = L.polyline([[cook.lat, cook.lng], [customer.lat, customer.lng]], ROUTE_LINE_STYLE).addTo(map);
+    routeLines.push(line);
+  });
+
+  applyCustomerView();
+}
+
+function updateDrivers(drivers) {
+  drivers.forEach((driver) => {
+    const marker = driverById.get(driver.id);
+    if (!marker) return;
+    marker.setLatLng([driver.lat, driver.lng]);
+  });
+
+  applyCustomerView();
+}
+
+function storeDriverScores(scores) {
+  driverScoreMap = new Map(Object.entries(scores));
+}
+
+function updateOrderStatuses(updates) {
+  if (!liveData || !updates.length) return;
+  const statusById = new Map();
+  updates.forEach((u) => statusById.set(u.id, u.status));
+  liveData.orders.forEach((order) => {
+    if (statusById.has(order.id)) {
+      order.status = statusById.get(order.id);
+    }
+  });
+}
+
+function buildBatches(filter) {
+  if (!liveData) return [];
+  const mode = filter?.mode || "dispatch";
+  const orderId = filter?.orderId || "";
+  const driverId = filter?.driverId || "";
+  const batches = Array.from(batchMap.values());
+  return batches.filter((batch) => {
+    if (mode === "customer" && orderId) return batch.orderIds.includes(orderId);
+    if (mode === "driver" && driverId) return batch.driverId === driverId;
+    return true;
+  });
+}
+
+async function drawRoutes(filter) {
+  if (!liveData) return;
+
+  const useStreet = document.getElementById("street-routing").checked;
+  const provider = document.getElementById("routing-provider").value;
+  const batches = buildBatches(filter);
+
+  if (!useStreet) {
+    return;
+  }
+
+  // Remove straight-line routes, replace with street routing
+  routeLines.forEach(line => map.removeLayer(line));
+  routeLines = [];
+
+  for (let i = 0; i < batches.length; i += 1) {
+    const batch = batches[i];
+    const coords = batch.stops.map((stop) => ({ lat: stop.lat, lng: stop.lng }));
+
+    try {
+      const route = await requestRoute(provider, coords);
+      if (!route || !route.geometry || route.geometry.length < 2) {
+        drawStraightBatch(coords);
+        continue;
+      }
+      const line = L.polyline(route.geometry, ROUTE_LINE_STYLE).addTo(map);
+      routeLines.push(line);
+      if (route.durationSeconds != null) {
+        lastEtaByBatch.set(batch.id, route.durationSeconds);
+      }
+    } catch (err) {
+      drawStraightBatch(coords);
+    }
+  }
+
+  updateEtaDisplay();
+}
+
+function drawStraightBatch(coords) {
+  for (let i = 1; i < coords.length; i += 1) {
+    const a = coords[i - 1];
+    const b = coords[i];
+    const line = L.polyline([[a.lat, a.lng], [b.lat, b.lng]], ROUTE_LINE_STYLE).addTo(map);
+    routeLines.push(line);
+  }
+}
+
+async function requestRoute(provider, coords) {
+  const body = {
+    provider,
+    coordinates: coords.map(c => ({ lat: c.lat, lng: c.lng })),
+    profile: "driving",
+  };
+
+  const response = await fetch(`${getRoutingServer()}/route`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
+}
+
+function getRoutingServer() {
+  const input = document.getElementById("routing-server");
+  if (!input) return "http://localhost:8080";
+  const value = input.value.trim();
+  return value || "http://localhost:8080";
+}
+
+function getDispatchServer() {
+  const input = document.getElementById("dispatch-server");
+  if (!input) return "http://localhost:9002";
+  const value = input.value.trim();
+  return value || "http://localhost:9002";
+}
+
+function getRealtimeServer() {
+  const input = document.getElementById("realtime-server");
+  if (!input) return "http://localhost:8080";
+  const value = input.value.trim();
+  return value || "http://localhost:8080";
+}
+
+function loadSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+  } catch (err) {
+    return {};
+  }
+}
+
+function saveSettings() {
+  const settings = {
+    routingServer: getRoutingServer(),
+    routingProvider: document.getElementById("routing-provider").value,
+    streetRouting: document.getElementById("street-routing").checked,
+    customerOrder: document.getElementById("customer-order").value,
+    viewMode: document.getElementById("view-mode").value,
+    driverId: document.getElementById("driver-select").value,
+    authRole: document.getElementById("auth-role").value,
+    dispatchServer: getDispatchServer(),
+    realtimeServer: getRealtimeServer(),
+  };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function applySettingsToUI() {
+  const settings = loadSettings();
+  if (settings.routingServer) {
+    const value = settings.routingServer === "http://localhost:8080" ? "http://localhost:9003" : settings.routingServer;
+    document.getElementById("routing-server").value = value;
+  }
+  if (settings.routingProvider) {
+    document.getElementById("routing-provider").value = settings.routingProvider;
+  }
+  if (typeof settings.streetRouting === "boolean") {
+    document.getElementById("street-routing").checked = settings.streetRouting;
+  }
+  if (settings.customerOrder) {
+    document.getElementById("customer-order").value = settings.customerOrder;
+  }
+  if (settings.viewMode) {
+    document.getElementById("view-mode").value = settings.viewMode;
+  }
+  if (settings.driverId) {
+    document.getElementById("driver-select").value = settings.driverId;
+  }
+  if (settings.authRole) {
+    document.getElementById("auth-role").value = settings.authRole;
+  }
+  if (settings.dispatchServer) {
+    document.getElementById("dispatch-server").value = settings.dispatchServer;
+  }
+  if (settings.realtimeServer) {
+    const value = settings.realtimeServer === "http://localhost:8080" ? "http://localhost:9004" : settings.realtimeServer;
+    document.getElementById("realtime-server").value = value;
+  }
+}
+
+function populateCustomerOrders(orders) {
+  const select = document.getElementById("customer-order");
+  select.innerHTML = '<option value="">Select an Order</option>';
+  orders.slice(0, 200).forEach((order) => {
+    const option = document.createElement("option");
+    option.value = order.id;
+    option.textContent = `Order ${order.id} (Driver ${order.driverId})`;
+    select.appendChild(option);
+  });
+}
+
+function populateDriverSelect(drivers) {
+  const select = document.getElementById("driver-select");
+  if (!select) return;
+  select.innerHTML = '<option value="">Select a Driver</option>';
+  drivers.forEach((driver) => {
+    const option = document.createElement("option");
+    option.value = driver.id;
+    option.textContent = `Driver ${driver.id}`;
+    select.appendChild(option);
+  });
+}
+
+function getViewMode() {
+  const select = document.getElementById("view-mode");
+  return select ? select.value : "dispatch";
+}
+
+function applyCustomerView() {
+  if (!liveData) return;
+  const mode = getViewMode();
+  const selectedOrderId = document.getElementById("customer-order").value;
+  const selectedDriverId = document.getElementById("driver-select").value;
+  const customerControls = document.getElementById("customer-view-controls");
+  const driverControls = document.getElementById("driver-view-controls");
+  const gpsControls = document.getElementById("gps-sim-controls");
+  const statusControls = document.getElementById("status-controls");
+  if (customerControls) customerControls.style.display = mode === "customer" ? "block" : "none";
+  if (driverControls) driverControls.style.display = mode === "driver" ? "block" : "none";
+  if (gpsControls) gpsControls.style.display = mode === "driver" ? "block" : "none";
+  if (statusControls) statusControls.style.display = mode === "customer" ? "block" : "none";
+  const customerFields = document.getElementById("customer-link");
+  const etaField = document.getElementById("eta-display");
+  const statusField = document.getElementById("status-display");
+  const timelineField = document.getElementById("timeline");
+  const showCustomerFields = mode === "customer";
+  if (customerFields) customerFields.style.display = showCustomerFields ? "block" : "none";
+  if (etaField) etaField.style.display = showCustomerFields ? "block" : "none";
+  if (statusField) statusField.style.display = showCustomerFields ? "block" : "none";
+  if (timelineField) timelineField.style.display = showCustomerFields ? "block" : "none";
+
+  if (mode === "dispatch") {
+    updateShareLink("");
+    driverMarkers.forEach(marker => map.addLayer(marker));
+    cookMarkers.forEach(marker => map.addLayer(marker));
+    customerMarkers.forEach(marker => map.addLayer(marker));
+    updateEtaDisplay();
+    updateStatusDisplay();
+    lastRouteFilter = { mode: "dispatch", orderId: "", driverId: "" };
+    drawRoutes(lastRouteFilter);
+    stopEtaPoll();
+    updatePricingDisplay();
+    updateReliabilityDisplay();
+    startAlertPoll();
+    startSummaryPoll();
+    return;
+  }
+
+  if (mode === "customer") {
+    let orderId = selectedOrderId;
+    if (!orderId && liveData.orders.length) {
+      orderId = liveData.orders[0].id;
+      document.getElementById("customer-order").value = orderId;
+    }
+    updateShareLink(orderId);
+    const order = liveData.orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const visibleDriver = driverById.get(order.driverId);
+    driverMarkers.forEach(marker => {
+      if (marker === visibleDriver) {
+        map.addLayer(marker);
+      } else {
+        map.removeLayer(marker);
+      }
+    });
+
+    cookMarkers.forEach(marker => {
+      if (marker === cookMarkerById.get(order.cookId)) {
+        map.addLayer(marker);
+      } else {
+        map.removeLayer(marker);
+      }
+    });
+
+    customerMarkers.forEach(marker => {
+      if (marker === customerMarkerById.get(order.customerId)) {
+        map.addLayer(marker);
+      } else {
+        map.removeLayer(marker);
+      }
+    });
+
+    updateEtaDisplay(order);
+    updateStatusDisplay(order);
+    lastRouteFilter = { mode: "customer", orderId, driverId: "" };
+    drawRoutes(lastRouteFilter);
+    startEtaPoll(orderId);
+    updatePricingDisplay(order);
+    updateReliabilityDisplay(order.driverId);
+    startSummaryPoll();
+    return;
+  }
+
+  if (mode === "driver") {
+    let driverId = selectedDriverId;
+    if (!driverId && liveData.drivers.length) {
+      driverId = liveData.drivers[0].id;
+      document.getElementById("driver-select").value = driverId;
+    }
+    updateShareLink("");
+    const driverMarker = driverById.get(driverId);
+    driverMarkers.forEach(marker => {
+      if (marker === driverMarker) {
+        map.addLayer(marker);
+      } else {
+        map.removeLayer(marker);
+      }
+    });
+
+    const orders = liveData.orders.filter(o => o.driverId === driverId);
+    const cookIds = new Set(orders.map(o => o.cookId));
+    const customerIds = new Set(orders.map(o => o.customerId));
+
+    cookMarkers.forEach(marker => {
+      const match = [...cookIds].some(id => cookMarkerById.get(id) === marker);
+      if (match) map.addLayer(marker);
+      else map.removeLayer(marker);
+    });
+
+    customerMarkers.forEach(marker => {
+      const match = [...customerIds].some(id => customerMarkerById.get(id) === marker);
+      if (match) map.addLayer(marker);
+      else map.removeLayer(marker);
+    });
+
+    updateEtaDisplay();
+    updateStatusDisplay();
+    lastRouteFilter = { mode: "driver", orderId: "", driverId };
+    drawRoutes(lastRouteFilter);
+    stopEtaPoll();
+    updatePricingDisplay();
+    updateReliabilityDisplay(driverId);
+    startAlertPoll();
+    startSummaryPoll();
+  }
+}
+
+function setupUI() {
+  const inputs = [
+    "routing-provider",
+    "street-routing",
+    "routing-server",
+    "dispatch-server",
+    "realtime-server",
+    "customer-order",
+    "view-mode",
+    "driver-select",
+    "auth-role"
+  ];
+  inputs.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", () => {
+      saveSettings();
+      if (id === "customer-order" || id === "view-mode" || id === "driver-select") applyCustomerView();
+      if (id === "routing-provider" || id === "street-routing" || id === "routing-server") drawRoutes(lastRouteFilter);
+      if (id === "auth-role") {
+        authToken = "";
+        updateAuthNote("Auth role changed. Reconnect to refresh token.");
+      }
+    });
+  });
+}
+
+async function tryLoadServerConfig() {
+  applySettingsToUI();
+  const base = getRealtimeServer();
+  try {
+    const response = await fetch(`${base}/api/config`);
+    if (!response.ok) return;
+    const config = await response.json();
+    if (config.defaultProvider) {
+      document.getElementById("routing-provider").value = config.defaultProvider;
+    }
+  } catch (err) {
+    // No-op for offline mode
+  }
+}
+
+function updateShareLink(orderId) {
+  const node = document.getElementById("customer-link");
+  if (!node) return;
+  if (!orderId) {
+    node.textContent = "";
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("orderId", orderId);
+  node.textContent = `Share link: ${url.toString()}`;
+}
+
+function updateEtaDisplay(order) {
+  const node = document.getElementById("eta-display");
+  if (!node) return;
+  if (!order) {
+    node.textContent = "";
+    return;
+  }
+  const batch = findBatchByOrder(order.id);
+  const seconds = batch ? lastEtaByBatch.get(batch.id) : null;
+  if (!seconds) {
+    node.textContent = "ETA: calculating...";
+    return;
+  }
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  node.textContent = `ETA: ~${minutes} min`;
+}
+
+function updateStatusDisplay(order) {
+  const node = document.getElementById("status-display");
+  if (!node) return;
+  if (!order) {
+    node.textContent = "";
+    renderTimeline(null);
+    return;
+  }
+  const status = order.status || "unknown";
+  const label = status.replace(/_/g, " ");
+  node.textContent = `Status: ${label}`;
+  renderTimeline(status);
+}
+
+function renderTimeline(status) {
+  const container = document.getElementById("timeline");
+  if (!container) return;
+  if (!status) {
+    container.innerHTML = "";
+    return;
+  }
+  const currentIndex = STATUS_STEPS.indexOf(status);
+  container.className = "timeline";
+  container.innerHTML = STATUS_STEPS.map((step, index) => {
+    const classes = ["timeline-item"];
+    if (index < currentIndex) classes.push("done");
+    if (index === currentIndex) classes.push("active");
+    const label = step.replace(/_/g, " ");
+    return `<div class="${classes.join(" ")}"><span class="timeline-dot"></span><span class="timeline-label">${label}</span></div>`;
+  }).join("");
+}
+
+function updateAuthNote(text) {
+  const node = document.getElementById("auth-note");
+  if (!node) return;
+  node.textContent = text || "";
+}
+
+async function ensureAuthToken() {
+  const role = document.getElementById("auth-role").value || "dispatch";
+  const orderId = document.getElementById("customer-order").value || "";
+  const driverId = document.getElementById("driver-select").value || "";
+  if (authToken) return;
+
+  try {
+    const response = await fetch(`${getRealtimeServer()}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role, orderId, driverId }),
+    });
+    if (!response.ok) {
+      updateAuthNote("Auth failed. Server not responding.");
+      return;
+    }
+    const data = await response.json();
+    authToken = data.token || "";
+    updateAuthNote(authToken ? `Auth token set for ${data.role}` : "Auth failed.");
+  } catch (err) {
+    updateAuthNote("Auth failed. Check server.");
+  }
+}
+
+function startGpsSim() {
+  if (gpsSimInterval) return;
+  const driverId = document.getElementById("driver-select").value;
+  if (!driverId) {
+    updateAuthNote("Select a driver to start GPS simulation.");
+    return;
+  }
+  ensureAuthToken();
+  gpsSimInterval = setInterval(() => {
+    sendDriverLocation(driverId);
+  }, 5000);
+  updateAuthNote("Driver GPS simulation running.");
+}
+
+function stopGpsSim() {
+  if (gpsSimInterval) {
+    clearInterval(gpsSimInterval);
+    gpsSimInterval = null;
+    updateAuthNote("Driver GPS simulation stopped.");
+  }
+}
+
+async function sendDriverLocation(driverId) {
+  if (!authToken) return;
+  const marker = driverById.get(driverId);
+  if (!marker) return;
+  const current = marker.getLatLng();
+  const nextLat = current.lat + (Math.random() - 0.5) * 0.002;
+  const nextLng = current.lng + (Math.random() - 0.5) * 0.002;
+
+  try {
+    await fetch(`${getRealtimeServer()}/api/location?token=${authToken}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ driverId, lat: nextLat, lng: nextLng }),
+    });
+  } catch (err) {
+    updateAuthNote("GPS update failed.");
+  }
+}
+
+async function pushStatusUpdate() {
+  const orderId = document.getElementById("customer-order").value;
+  if (!orderId) {
+    updateAuthNote("Select an order to update status.");
+    return;
+  }
+  await ensureAuthToken();
+  const status = document.getElementById("status-select").value;
+  try {
+    const response = await fetch(`${getRealtimeServer()}/api/orders/status?token=${authToken}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId, status }),
+    });
+    if (!response.ok) {
+      updateAuthNote("Status update failed.");
+    }
+  } catch (err) {
+    updateAuthNote("Status update failed.");
+  }
+}
+
+function startEtaPoll(orderId) {
+  stopEtaPoll();
+  etaPollInterval = setInterval(() => {
+    fetchEta(orderId);
+  }, 8000);
+}
+
+function stopEtaPoll() {
+  if (etaPollInterval) {
+    clearInterval(etaPollInterval);
+    etaPollInterval = null;
+  }
+}
+
+async function fetchEta(orderId) {
+  if (!orderId) return;
+  try {
+    const response = await fetch(`${getRealtimeServer()}/api/orders/eta?orderId=${orderId}`);
+    if (!response.ok) return;
+    const data = await response.json();
+    if (data && data.etaSeconds) {
+      const minutes = Math.max(1, Math.round(data.etaSeconds / 60));
+      const node = document.getElementById("eta-display");
+      if (node) node.textContent = `ETA: ~${minutes} min`;
+    }
+  } catch (err) {
+    // ignore
+  }
+}
+
+async function runAssignments() {
+  try {
+    const payload = {
+      orders: liveData?.orders || [],
+      drivers: liveData?.drivers || [],
+      cooks: liveData?.cooks || [],
+      driverScores: Object.fromEntries(driverScoreMap),
+    };
+    const response = await fetch(`${getDispatchServer()}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      updateAuthNote("Dispatch assignment failed.");
+      return;
+    }
+    const data = await response.json();
+    if (liveData && data.assignments) {
+      data.assignments.forEach((a) => {
+        const order = liveData.orders.find((o) => o.id === a.orderId);
+        if (order) order.driverId = a.driverId;
+      });
+      updateAuthNote(`Assignments updated: ${data.assignments.length}`);
+      drawRoutes(lastRouteFilter);
+      applyCustomerView();
+    }
+  } catch (err) {
+    updateAuthNote("Dispatch assignment failed.");
+  }
+}
+
+function updateReliabilityDisplay(driverId) {
+  const node = document.getElementById("reliability-display");
+  if (!node) return;
+  if (!driverId) {
+    node.textContent = "";
+    return;
+  }
+  const score = driverScoreMap.get(driverId) || "N/A";
+  node.textContent = `Driver reliability score: ${score}`;
+}
+
+function updatePricingDisplay(order) {
+  const node = document.getElementById("pricing-display");
+  if (!node) return;
+  if (!order) {
+    node.textContent = "";
+    return;
+  }
+  const cook = cookById.get(order.cookId);
+  const customer = customerById.get(order.customerId);
+  if (!cook || !customer) return;
+  fetch(`${getRealtimeServer()}/api/pricing/quote?cookId=${cook.id}&customerId=${customer.id}`)
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (!data || !data.priceCents) return;
+      node.textContent = `Price quote: $${(data.priceCents / 100).toFixed(2)}`;
+    })
+    .catch(() => {});
+}
+
+function startAlertPoll() {
+  stopAlertPoll();
+  alertPollInterval = setInterval(() => {
+    fetch(`${getRealtimeServer()}/api/alerts`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const node = document.getElementById("alerts-display");
+        if (!node) return;
+        const count = data?.alerts?.length || 0;
+        node.textContent = count ? `Alerts: ${count}` : "";
+      })
+      .catch(() => {});
+  }, 10000);
+}
+
+function stopAlertPoll() {
+  if (alertPollInterval) {
+    clearInterval(alertPollInterval);
+    alertPollInterval = null;
+  }
+}
+
+function startSummaryPoll() {
+  stopSummaryPoll();
+  summaryPollInterval = setInterval(() => {
+    fetch(`${getRealtimeServer()}/api/summary`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const node = document.getElementById("summary-display");
+        if (!node || !data) return;
+        const statusLine = data.statusCounts
+          ? `Orders by status: ${Object.entries(data.statusCounts).map(([k, v]) => `${k} ${v}`).join(", ")}`
+          : "";
+        node.innerHTML = [
+          `Active orders: ${data.activeOrders}`,
+          `Avg ETA: ${data.avgEtaMinutes}m`,
+          `Surge orders: ${data.surgeOrders}`,
+          `Alerts: ${data.alerts}`,
+          `Drivers online/offline: ${data.onlineDrivers}/${data.offlineDrivers}`,
+          `GPS stale: ${data.staleGps}`,
+          `Avg driver→cook distance: ${data.avgDriverDistanceKm} km`,
+          `Avg delivery time (15m): ${data.avgDeliveryMinutes}m`,
+          `Dispatch success: ${data.dispatchSuccessRate}%`,
+          `Revenue estimate: $${(data.revenueEstimateCents / 100).toFixed(2)}`,
+          `Batches: ${data.batchesCount} (avg ${data.avgOrdersPerBatch}/batch)`,
+          statusLine,
+        ].filter(Boolean).map((line) => `<div>${line}</div>`).join("");
+      })
+      .catch(() => {});
+  }, 12000);
+}
+
+function stopSummaryPoll() {
+  if (summaryPollInterval) {
+    clearInterval(summaryPollInterval);
+    summaryPollInterval = null;
+  }
+}
+
+function storeBatches(batches) {
+  batchMap.clear();
+  batches.forEach((batch) => {
+    batchMap.set(batch.id, batch);
+  });
+}
+
+function findBatchByOrder(orderId) {
+  for (const batch of batchMap.values()) {
+    if (batch.orderIds && batch.orderIds.includes(orderId)) return batch;
+  }
+  return null;
+}
+
+function renderLegend() {
+  const node = document.getElementById("legend");
+  if (!node) return;
+  node.innerHTML = `
+    <div class="legend-row"><span class="legend-swatch" style="background:#fb8c00"></span>Driver</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#2e7d32"></span>Cook</div>
+    <div class="legend-row"><span class="legend-swatch" style="background:#1565c0"></span>Customer</div>
+  `;
+}
+
+function syncAuthRoleToViewMode() {
+  const role = document.getElementById("auth-role").value;
+  const viewMode = document.getElementById("view-mode");
+  if (!viewMode) return;
+  if (role === "customer") viewMode.value = "customer";
+  if (role === "driver") viewMode.value = "driver";
+  if (role === "dispatch") viewMode.value = "dispatch";
+  applyCustomerView();
+}
+
+function applyOrderFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const orderId = params.get("orderId");
+  if (!orderId) return;
+  const select = document.getElementById("customer-order");
+  if (!select) return;
+  select.value = orderId;
+  saveSettings();
+  applyCustomerView();
+}
+
+setupUI();
+  tryLoadServerConfig().then(applyOrderFromUrl);
+</script>
+
+</body>
+</html>

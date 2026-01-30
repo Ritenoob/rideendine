@@ -1,0 +1,25 @@
+const http = require("http");
+
+const PORT = process.env.PORT || 9004;
+
+const server = http.createServer((req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  if (req.method === "GET" && req.url === "/health") {
+    res.statusCode = 200;
+    res.end(JSON.stringify({ ok: true, service: "realtime" }));
+    return;
+  }
+
+  res.statusCode = 404;
+  res.end(JSON.stringify({ error: "not found" }));
+});
+
+server.on("upgrade", (req, socket) => {
+  socket.end();
+});
+
+server.listen(PORT, () => {
+  console.log(`Realtime service running on http://localhost:${PORT}`);
+});

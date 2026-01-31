@@ -1,0 +1,1818 @@
+openapi: 3.1.0
+
+info:
+  title: RideNDine API
+  version: 1.0.0
+  description: |
+    Multi-role food delivery platform connecting customers, home chefs, and drivers.
+
+    ## Features
+    - JWT-based authentication with refresh tokens
+    - Role-based access control (customer, chef, driver, admin)
+    - Stripe Connect integration for payments
+    - Real-time order tracking via WebSocket
+    - Location-based chef discovery
+    - Complete order lifecycle management
+
+    ## Authentication
+    Most endpoints require a Bearer token in the Authorization header:
+    ```
+    Authorization: Bearer <access_token>
+    ```
+
+    Access tokens expire after 15 minutes. Use the refresh endpoint to get a new token.
+
+  contact:
+    name: RideNDine Team
+    email: support@ridendine.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:9001
+    description: Local development server
+  - url: https://api.ridendine.com
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User registration, login, and token management
+  - name: Users
+    description: User profile management
+  - name: Chefs
+    description: Chef profiles, menus, and Stripe Connect integration
+  - name: Orders
+    description: Order creation, tracking, and lifecycle management
+  - name: Drivers
+    description: Driver management and location tracking
+  - name: Dispatch
+    description: Driver assignment and order dispatch
+  - name: Admin
+    description: Administrative operations
+  - name: WebSocket
+    description: Real-time communication events
+
+paths:
+  # ============================================================================
+  # AUTHENTICATION
+  # ============================================================================
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a new user account
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, firstName, lastName, phoneNumber, role]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: SecurePass123!
+                firstName:
+                  type: string
+                  example: John
+                lastName:
+                  type: string
+                  example: Doe
+                phoneNumber:
+                  type: string
+                  pattern: '^\+?[1-9]\d{1,14}$'
+                  example: +15555551234
+                role:
+                  type: string
+                  enum: [customer, chef, driver]
+                  example: customer
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  accessToken:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  refreshToken:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                statusCode: 409
+                message: Email already in use
+                error: Conflict
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate and receive JWT tokens
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  example: SecurePass123!
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                statusCode: 401
+                message: Invalid email or password
+                error: Unauthorized
+
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      operationId: refreshToken
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Logout and invalidate tokens
+      operationId: logoutUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/verify-email:
+    post:
+      tags: [Authentication]
+      summary: Verify email address with token
+      operationId: verifyEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Email verified successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/forgot-password:
+    post:
+      tags: [Authentication]
+      summary: Request password reset email
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Password reset email sent
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /auth/reset-password:
+    post:
+      tags: [Authentication]
+      summary: Reset password with token
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token:
+                  type: string
+                newPassword:
+                  type: string
+                  format: password
+                  minLength: 8
+      responses:
+        '200':
+          description: Password reset successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ============================================================================
+  # USERS
+  # ============================================================================
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Get current user profile
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      tags: [Users]
+      summary: Update user profile
+      operationId: updateCurrentUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                phoneNumber:
+                  type: string
+                avatarUrl:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    delete:
+      tags: [Users]
+      summary: Delete user account
+      operationId: deleteCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Account deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================================================
+  # CHEFS
+  # ============================================================================
+  /chefs:
+    post:
+      tags: [Chefs]
+      summary: Apply to become a chef
+      operationId: createChef
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [businessName, cuisineTypes, businessAddress, latitude, longitude]
+              properties:
+                businessName:
+                  type: string
+                  example: Chef John's Kitchen
+                cuisineTypes:
+                  type: array
+                  items:
+                    type: string
+                  example: [italian, mexican]
+                businessAddress:
+                  type: string
+                  example: 123 Main St, Austin, TX 78701
+                latitude:
+                  type: number
+                  format: double
+                  example: 30.2672
+                longitude:
+                  type: number
+                  format: double
+                  example: -97.7431
+                businessPhone:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Chef application submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chef'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /chefs/search:
+    get:
+      tags: [Chefs]
+      summary: Search for chefs near a location
+      operationId: searchChefs
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+          example: 30.2672
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+          example: -97.7431
+        - name: radius
+          in: query
+          schema:
+            type: number
+            format: double
+            default: 10
+          description: Search radius in kilometers
+        - name: cuisineType
+          in: query
+          schema:
+            type: string
+          example: italian
+        - name: minRating
+          in: query
+          schema:
+            type: number
+            format: double
+            minimum: 0
+            maximum: 5
+      responses:
+        '200':
+          description: List of chefs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chefs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChefSearchResult'
+                  total:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /chefs/{id}:
+    get:
+      tags: [Chefs]
+      summary: Get chef profile details
+      operationId: getChef
+      parameters:
+        - $ref: '#/components/parameters/ChefId'
+      responses:
+        '200':
+          description: Chef profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chef'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Chefs]
+      summary: Update chef profile
+      operationId: updateChef
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChefId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: string
+                minimumOrder:
+                  type: integer
+                  description: Minimum order amount in cents
+                deliveryRadius:
+                  type: number
+                  description: Delivery radius in kilometers
+      responses:
+        '200':
+          description: Chef profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chef'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chefs/{id}/menus:
+    get:
+      tags: [Chefs]
+      summary: Get all menus for a chef
+      operationId: getChefMenus
+      parameters:
+        - $ref: '#/components/parameters/ChefId'
+      responses:
+        '200':
+          description: List of menus
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  menus:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Menu'
+
+    post:
+      tags: [Chefs]
+      summary: Create a new menu
+      operationId: createMenu
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChefId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: Dinner Menu
+                description:
+                  type: string
+                isActive:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Menu created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Menu'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /chefs/{chefId}/menus/{menuId}:
+    get:
+      tags: [Chefs]
+      summary: Get menu details with items
+      operationId: getMenu
+      parameters:
+        - $ref: '#/components/parameters/ChefId'
+        - $ref: '#/components/parameters/MenuId'
+      responses:
+        '200':
+          description: Menu with items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuWithItems'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chefs/{chefId}/menus/{menuId}/items:
+    post:
+      tags: [Chefs]
+      summary: Create a menu item
+      operationId: createMenuItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChefId'
+        - $ref: '#/components/parameters/MenuId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, price, category]
+              properties:
+                name:
+                  type: string
+                  example: Spaghetti Carbonara
+                description:
+                  type: string
+                price:
+                  type: integer
+                  description: Price in cents
+                  example: 1599
+                category:
+                  type: string
+                  example: pasta
+                prepTimeMinutes:
+                  type: integer
+                  example: 25
+                isAvailable:
+                  type: boolean
+                  default: true
+                imageUrl:
+                  type: string
+                  format: uri
+                dietaryTags:
+                  type: array
+                  items:
+                    type: string
+                  example: [vegetarian]
+      responses:
+        '201':
+          description: Menu item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /chefs/{id}/reviews:
+    get:
+      tags: [Chefs]
+      summary: Get reviews for a chef
+      operationId: getChefReviews
+      parameters:
+        - $ref: '#/components/parameters/ChefId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated reviews
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReviews'
+
+  /chefs/{id}/stripe/onboard:
+    post:
+      tags: [Chefs]
+      summary: Start Stripe Connect onboarding
+      operationId: startStripeOnboarding
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChefId'
+      responses:
+        '200':
+          description: Onboarding URL generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                    example: https://connect.stripe.com/setup/...
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /chefs/{id}/stripe/status:
+    get:
+      tags: [Chefs]
+      summary: Check Stripe Connect onboarding status
+      operationId: getStripeStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChefId'
+      responses:
+        '200':
+          description: Stripe account status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isOnboarded:
+                    type: boolean
+                  stripeAccountId:
+                    type: string
+                  chargesEnabled:
+                    type: boolean
+                  payoutsEnabled:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ============================================================================
+  # ORDERS
+  # ============================================================================
+  /orders:
+    get:
+      tags: [Orders]
+      summary: List orders with filters
+      operationId: listOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, payment_confirmed, accepted, preparing, ready_for_pickup, assigned_to_driver, picked_up, in_transit, delivered, cancelled, refunded]
+        - name: chefId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: customerId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOrders'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Orders]
+      summary: Create a new order
+      operationId: createOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chefId, deliveryAddress, deliveryLatitude, deliveryLongitude, items]
+              properties:
+                chefId:
+                  type: string
+                  format: uuid
+                deliveryAddress:
+                  type: string
+                  example: 456 Customer St, Austin, TX 78702
+                deliveryLatitude:
+                  type: number
+                  format: double
+                  example: 30.2750
+                deliveryLongitude:
+                  type: number
+                  format: double
+                  example: -97.7500
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [menuItemId, quantity]
+                    properties:
+                      menuItemId:
+                        type: string
+                        format: uuid
+                      quantity:
+                        type: integer
+                        minimum: 1
+                      notes:
+                        type: string
+                deliveryInstructions:
+                  type: string
+                tipAmountCents:
+                  type: integer
+                  minimum: 0
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /orders/{id}:
+    get:
+      tags: [Orders]
+      summary: Get order details
+      operationId: getOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orders/{id}/create-payment-intent:
+    post:
+      tags: [Orders]
+      summary: Create Stripe PaymentIntent for order
+      operationId: createPaymentIntent
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Payment intent created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientSecret:
+                    type: string
+                    example: pi_abc123_secret_def456
+                  paymentIntentId:
+                    type: string
+                    example: pi_abc123
+                  amountCents:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /orders/{id}/accept:
+    patch:
+      tags: [Orders]
+      summary: Chef accepts the order
+      operationId: acceptOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  orderNumber:
+                    type: string
+                  status:
+                    type: string
+                    example: accepted
+                  message:
+                    type: string
+                    example: Order accepted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /orders/{id}/tracking:
+    get:
+      tags: [Orders]
+      summary: Get comprehensive order tracking data
+      operationId: getOrderTracking
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order tracking information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderTracking'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # DRIVERS
+  # ============================================================================
+  /drivers/register:
+    post:
+      tags: [Drivers]
+      summary: Register as a driver
+      operationId: registerDriver
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, firstName, lastName, phoneNumber, vehicleType, licensePlate]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                phoneNumber:
+                  type: string
+                vehicleType:
+                  type: string
+                  enum: [car, bike, scooter, motorcycle]
+                vehicleMake:
+                  type: string
+                  example: Toyota
+                vehicleModel:
+                  type: string
+                  example: Camry
+                vehicleYear:
+                  type: integer
+                  example: 2020
+                licensePlate:
+                  type: string
+                  example: ABC1234
+      responses:
+        '201':
+          description: Driver registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /drivers/profile:
+    get:
+      tags: [Drivers]
+      summary: Get driver profile
+      operationId: getDriverProfile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Driver profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /drivers/location:
+    post:
+      tags: [Drivers]
+      summary: Update GPS location
+      operationId: updateDriverLocation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                latitude:
+                  type: number
+                  format: double
+                longitude:
+                  type: number
+                  format: double
+                accuracy:
+                  type: number
+                  format: double
+                  description: Accuracy in meters
+                speed:
+                  type: number
+                  format: double
+                  description: Speed in m/s
+                heading:
+                  type: number
+                  format: double
+                  description: Heading in degrees
+      responses:
+        '200':
+          description: Location updated successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /drivers/availability:
+    patch:
+      tags: [Drivers]
+      summary: Toggle driver availability (go online/offline)
+      operationId: updateDriverAvailability
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isAvailable]
+              properties:
+                isAvailable:
+                  type: boolean
+      responses:
+        '200':
+          description: Availability updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /drivers/stats:
+    get:
+      tags: [Drivers]
+      summary: Get driver statistics and earnings
+      operationId: getDriverStats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Driver statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalDeliveries:
+                    type: integer
+                  successfulDeliveries:
+                    type: integer
+                  totalEarnings:
+                    type: integer
+                    description: Total earnings in cents
+                  pendingPayouts:
+                    type: integer
+                    description: Pending payout amount in cents
+                  averageRating:
+                    type: number
+                    format: double
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================================================
+  # DISPATCH
+  # ============================================================================
+  /dispatch/assign:
+    post:
+      tags: [Dispatch]
+      summary: Assign driver to order
+      operationId: assignDriver
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId]
+              properties:
+                orderId:
+                  type: string
+                  format: uuid
+                searchRadiusKm:
+                  type: number
+                  format: double
+                  default: 15
+      responses:
+        '200':
+          description: Driver assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assignmentId:
+                    type: string
+                    format: uuid
+                  driverId:
+                    type: string
+                    format: uuid
+                  driverName:
+                    type: string
+                  distanceKm:
+                    type: number
+                  estimatedPickupTimeMinutes:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No available drivers found
+
+  /dispatch/available-drivers:
+    get:
+      tags: [Dispatch]
+      summary: Find available drivers near location
+      operationId: getAvailableDrivers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: latitude
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+        - name: longitude
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+        - name: radiusKm
+          in: query
+          schema:
+            type: number
+            format: double
+            default: 10
+      responses:
+        '200':
+          description: List of available drivers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  drivers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        distanceKm:
+                          type: number
+                        averageRating:
+                          type: number
+                        currentLatitude:
+                          type: number
+                        currentLongitude:
+                          type: number
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ============================================================================
+  # ADMIN
+  # ============================================================================
+  /admin/chefs/{id}/verify:
+    patch:
+      tags: [Admin]
+      summary: Verify or reject chef account
+      operationId: verifyChef
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChefId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verificationStatus]
+              properties:
+                verificationStatus:
+                  type: string
+                  enum: [approved, rejected]
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Chef verification status updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/actions:
+    get:
+      tags: [Admin]
+      summary: Get admin action audit log
+      operationId: getAdminActions
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: actionType
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated admin actions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  actions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        adminId:
+                          type: string
+                          format: uuid
+                        actionType:
+                          type: string
+                        targetType:
+                          type: string
+                        targetId:
+                          type: string
+                          format: uuid
+                        details:
+                          type: object
+                        createdAt:
+                          type: string
+                          format: date-time
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+                  totalPages:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+# ============================================================================
+# COMPONENTS
+# ============================================================================
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from /auth/login or /auth/register
+
+  parameters:
+    ChefId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Chef ID
+
+    MenuId:
+      name: menuId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Menu ID
+
+    OrderId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Order ID
+
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number for pagination
+
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Number of items per page
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [customer, chef, driver, admin]
+        createdAt:
+          type: string
+          format: date-time
+
+    UserProfile:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            firstName:
+              type: string
+            lastName:
+              type: string
+            phoneNumber:
+              type: string
+            avatarUrl:
+              type: string
+              format: uri
+            isVerified:
+              type: boolean
+
+    Chef:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        businessName:
+          type: string
+        description:
+          type: string
+        businessAddress:
+          type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        cuisineTypes:
+          type: array
+          items:
+            type: string
+        averageRating:
+          type: number
+          format: double
+        totalReviews:
+          type: integer
+        minimumOrder:
+          type: integer
+          description: Minimum order amount in cents
+        deliveryRadius:
+          type: number
+          description: Delivery radius in kilometers
+        isAvailable:
+          type: boolean
+        verificationStatus:
+          type: string
+          enum: [pending, approved, rejected]
+        stripeOnboardingComplete:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    ChefSearchResult:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        businessName:
+          type: string
+        cuisineTypes:
+          type: array
+          items:
+            type: string
+        averageRating:
+          type: number
+        totalReviews:
+          type: integer
+        distanceKm:
+          type: number
+        businessAddress:
+          type: string
+        isAvailable:
+          type: boolean
+
+    Menu:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        chefId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    MenuItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        menuId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: integer
+          description: Price in cents
+        category:
+          type: string
+        isAvailable:
+          type: boolean
+        prepTimeMinutes:
+          type: integer
+        imageUrl:
+          type: string
+          format: uri
+        dietaryTags:
+          type: array
+          items:
+            type: string
+
+    MenuWithItems:
+      allOf:
+        - $ref: '#/components/schemas/Menu'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/MenuItem'
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderNumber:
+          type: string
+          example: RND-20260131-0001
+        status:
+          type: string
+          enum: [pending, payment_confirmed, accepted, preparing, ready_for_pickup, assigned_to_driver, picked_up, in_transit, delivered, cancelled, refunded]
+        subtotalCents:
+          type: integer
+        taxCents:
+          type: integer
+        deliveryFeeCents:
+          type: integer
+        platformFeeCents:
+          type: integer
+        totalCents:
+          type: integer
+        chefEarningsCents:
+          type: integer
+        driverEarningsCents:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        estimatedDeliveryTime:
+          type: string
+          format: date-time
+
+    OrderDetail:
+      allOf:
+        - $ref: '#/components/schemas/Order'
+        - type: object
+          properties:
+            customer:
+              type: object
+              properties:
+                name:
+                  type: string
+                phone:
+                  type: string
+            chef:
+              type: object
+              properties:
+                businessName:
+                  type: string
+                address:
+                  type: string
+            driver:
+              type: object
+              properties:
+                name:
+                  type: string
+                phone:
+                  type: string
+                vehicleType:
+                  type: string
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  quantity:
+                    type: integer
+                  priceAtOrderCents:
+                    type: integer
+                  notes:
+                    type: string
+            deliveryAddress:
+              type: string
+            deliveryInstructions:
+              type: string
+
+    OrderTracking:
+      type: object
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        orderNumber:
+          type: string
+        status:
+          type: string
+        customer:
+          type: object
+        chef:
+          type: object
+        driver:
+          type: object
+          properties:
+            name:
+              type: string
+            phone:
+              type: string
+            latitude:
+              type: number
+            longitude:
+              type: number
+            lastLocationUpdate:
+              type: string
+              format: date-time
+        estimatedDeliveryTime:
+          type: string
+          format: date-time
+        etaMinutes:
+          type: integer
+        statusHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              status:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+
+    Driver:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        vehicleType:
+          type: string
+          enum: [car, bike, scooter, motorcycle]
+        vehicleMake:
+          type: string
+        vehicleModel:
+          type: string
+        vehicleYear:
+          type: integer
+        licensePlate:
+          type: string
+        isAvailable:
+          type: boolean
+        verificationStatus:
+          type: string
+          enum: [pending, approved, rejected, suspended]
+        averageRating:
+          type: number
+        totalDeliveries:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    PaginatedOrders:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+
+    PaginatedReviews:
+      type: object
+      properties:
+        reviews:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              rating:
+                type: integer
+                minimum: 1
+                maximum: 5
+              comment:
+                type: string
+              customerName:
+                type: string
+              createdAt:
+                type: string
+                format: date-time
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        message:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+        error:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  responses:
+    BadRequest:
+      description: Bad request - Validation errors
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            statusCode: 400
+            message: ["email must be an email", "password must be longer than 8 characters"]
+            error: Bad Request
+
+    Unauthorized:
+      description: Unauthorized - Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            statusCode: 401
+            message: Unauthorized
+            error: Unauthorized
+
+    Forbidden:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            statusCode: 403
+            message: Insufficient permissions
+            error: Forbidden
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            statusCode: 404
+            message: Resource not found
+            error: Not Found
+
+# ============================================================================
+# WEBHOOKS (External services)
+# ============================================================================
+webhooks:
+  stripeWebhook:
+    post:
+      summary: Stripe webhook events
+      description: |
+        Stripe sends webhook events to /webhooks/stripe for:
+        - account.updated (chef onboarding status)
+        - payment_intent.succeeded (order payment confirmed)
+        - payment_intent.payment_failed (payment failure)
+        - charge.refunded (refund processed)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                type:
+                  type: string
+                data:
+                  type: object
+      responses:
+        '200':
+          description: Webhook received
+
+# ============================================================================
+# ADDITIONAL METADATA
+# ============================================================================
+x-api-conventions:
+  rate-limiting:
+    global: 100 requests per 15 minutes per IP
+    login: 5 requests per minute
+    registration: 3 requests per hour
+  pagination:
+    default-limit: 20
+    max-limit: 100
+  timestamps:
+    format: ISO 8601
+    timezone: UTC
+  pricing:
+    currency: USD
+    unit: cents
+  coordinates:
+    latitude-range: [-90, 90]
+    longitude-range: [-180, 180]

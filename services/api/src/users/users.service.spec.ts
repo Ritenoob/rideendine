@@ -1,11 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
-import { Pool } from 'pg';
 import { NotFoundException } from '@nestjs/common';
 
 describe('UsersService', () => {
   let service: UsersService;
-  let db: Pool;
 
   const mockDb = {
     query: jest.fn(),
@@ -36,7 +34,6 @@ describe('UsersService', () => {
     }).compile();
 
     service = module.get<UsersService>(UsersService);
-    db = module.get<Pool>('DATABASE_POOL');
 
     jest.clearAllMocks();
   });
@@ -51,7 +48,7 @@ describe('UsersService', () => {
       expect(result).toHaveProperty('email');
       expect(result).toHaveProperty('role');
       expect(result).toHaveProperty('isVerified');
-      expect(result).toHaveProperty('stripe_customer_id');
+      expect(result).toHaveProperty('stripeCustomerId');
       expect(result).toHaveProperty('createdAt');
       expect(result).toHaveProperty('profile');
       expect(result.id).toBe('user-id');
@@ -65,7 +62,7 @@ describe('UsersService', () => {
     });
 
     it('should throw NotFoundException if user not found', async () => {
-      mockDb.query.mockResolvedValueOnce({ rows: [] });
+      mockDb.query.mockResolvedValue({ rows: [] });
 
       await expect(service.getProfile('non-existent-id')).rejects.toThrow(NotFoundException);
       await expect(service.getProfile('non-existent-id')).rejects.toThrow('User not found');

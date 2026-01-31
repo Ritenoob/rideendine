@@ -1,14 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { JwtService } from '@nestjs/jwt';
-import { Pool } from 'pg';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { UserRole } from '../common/interfaces/user.interface';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let db: Pool;
-  let jwtService: JwtService;
 
   const mockDb = {
     query: jest.fn(),
@@ -41,8 +39,6 @@ describe('AuthService', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
-    db = module.get<Pool>('DATABASE_POOL');
-    jwtService = module.get<JwtService>(JwtService);
 
     // Reset mocks
     jest.clearAllMocks();
@@ -53,7 +49,7 @@ describe('AuthService', () => {
     const registerDto = {
       email: 'test@example.com',
       password: 'Test1234!',
-      role: 'customer',
+      role: UserRole.CUSTOMER,
       firstName: 'Test',
       lastName: 'User',
       phone: '+1234567890',
@@ -100,7 +96,7 @@ describe('AuthService', () => {
     });
 
     it('should create role-specific record for chef', async () => {
-      const chefDto = { ...registerDto, role: 'chef' as const };
+      const chefDto = { ...registerDto, role: UserRole.CHEF };
       mockDb.query.mockResolvedValueOnce({ rows: [] });
       mockClient.query.mockResolvedValueOnce({ rows: [{ id: 'user-id', email: chefDto.email, role: chefDto.role, is_verified: false, created_at: new Date() }] });
       mockClient.query.mockResolvedValueOnce({ rows: [] });
@@ -108,14 +104,14 @@ describe('AuthService', () => {
 
       await service.register(chefDto);
 
-      const chefInsertCall = mockClient.query.mock.calls.find(call => 
+      const chefInsertCall = mockClient.query.mock.calls.find(call =>
         call[0].includes('INSERT INTO chefs')
       );
       expect(chefInsertCall).toBeDefined();
     });
 
     it('should create role-specific record for driver', async () => {
-      const driverDto = { ...registerDto, role: 'driver' as const };
+      const driverDto = { ...registerDto, role: UserRole.DRIVER };
       mockDb.query.mockResolvedValueOnce({ rows: [] });
       mockClient.query.mockResolvedValueOnce({ rows: [{ id: 'user-id', email: driverDto.email, role: driverDto.role, is_verified: false, created_at: new Date() }] });
       mockClient.query.mockResolvedValueOnce({ rows: [] });
@@ -123,7 +119,7 @@ describe('AuthService', () => {
 
       await service.register(driverDto);
 
-      const driverInsertCall = mockClient.query.mock.calls.find(call => 
+      const driverInsertCall = mockClient.query.mock.calls.find(call =>
         call[0].includes('INSERT INTO drivers')
       );
       expect(driverInsertCall).toBeDefined();
@@ -141,7 +137,7 @@ describe('AuthService', () => {
       const minimalDto = {
         email: 'test@example.com',
         password: 'Test1234!',
-        role: 'customer' as const,
+        role: UserRole.CUSTOMER,
       };
       mockDb.query.mockResolvedValueOnce({ rows: [] });
       mockClient.query.mockResolvedValueOnce({ rows: [{ id: 'user-id', email: minimalDto.email, role: minimalDto.role, is_verified: false, created_at: new Date() }] });
@@ -149,7 +145,7 @@ describe('AuthService', () => {
 
       await service.register(minimalDto);
 
-      const profileInsertCall = mockClient.query.mock.calls.find(call => 
+      const profileInsertCall = mockClient.query.mock.calls.find(call =>
         call[0].includes('INSERT INTO user_profiles')
       );
       expect(profileInsertCall).toBeUndefined();
@@ -166,7 +162,7 @@ describe('AuthService', () => {
       id: 'user-id',
       email: loginDto.email,
       password_hash: 'hashed-password',
-      role: 'customer',
+      role: UserRole.CUSTOMER,
       is_verified: true,
       first_name: 'Test',
       last_name: 'User',
@@ -240,13 +236,13 @@ describe('AuthService', () => {
     const mockPayload = {
       sub: 'user-id',
       email: 'test@example.com',
-      role: 'customer',
+      role: UserRole.CUSTOMER,
     };
 
     const mockUser = {
       id: 'user-id',
       email: 'test@example.com',
-      role: 'customer',
+      role: UserRole.CUSTOMER,
     };
 
     it('should successfully refresh tokens with valid refresh token', async () => {
@@ -446,7 +442,14 @@ describe('AuthService', () => {
     const mockUser = {
       id: 'user-id',
       email: 'test@example.com',
-      role: 'customer',
+      password_hash: 'hashed-password',
+      role: UserRole.CUSTOMER,
+      is_verified: true,
+      verification_token: null,
+      reset_token: null,
+      reset_token_expires: null,
+      created_at: new Date(),
+      updated_at: new Date(),
     };
 
     it('should generate access token with correct payload', async () => {

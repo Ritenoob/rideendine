@@ -1,4 +1,7 @@
+version: '3.8'
+
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
     container_name: ridendine_postgres
@@ -11,12 +14,16 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
+      - ./database/migrations:/docker-entrypoint-initdb.d/migrations
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ridendine"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - ridendine_network
 
+  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: ridendine_redis
@@ -29,17 +36,157 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - ridendine_network
 
+  # API Service (NestJS)
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    image: ridendine-api:latest
+    container_name: ridendine_api
+    ports:
+      - "9001:9001"
+    environment:
+      - NODE_ENV=development
+      - API_PORT=9001
+      - API_HOST=0.0.0.0
+      - DATABASE_URL=postgresql://ridendine:ridendine_dev_password@postgres:5432/ridendine_dev
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=ridendine
+      - DATABASE_PASSWORD=ridendine_dev_password
+      - DATABASE_NAME=ridendine_dev
+      - DATABASE_SSL=false
+      - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=dev-jwt-secret-change-in-production
+      - JWT_EXPIRES_IN=15m
+      - REFRESH_TOKEN_SECRET=dev-refresh-secret-change-in-production
+      - REFRESH_TOKEN_EXPIRES_IN=7d
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-sk_test_placeholder}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY:-pk_test_placeholder}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+      - MAPBOX_TOKEN=${MAPBOX_TOKEN:-}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+      - OSRM_BASE_URL=http://router.project-osrm.org
+      - LOG_LEVEL=debug
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=100
+      - MAX_FILE_SIZE_MB=10
+      - UPLOAD_DIRECTORY=/app/uploads
+    volumes:
+      - api_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ridendine_network
+
+  # Dispatch Service
+  dispatch:
+    build:
+      context: ./services/dispatch
+      dockerfile: Dockerfile
+    image: ridendine-dispatch:latest
+    container_name: ridendine_dispatch
+    ports:
+      - "9002:9002"
+    environment:
+      - NODE_ENV=development
+      - DISPATCH_PORT=9002
+      - DATABASE_URL=postgresql://ridendine:ridendine_dev_password@postgres:5432/ridendine_dev
+      - REDIS_URL=redis://redis:6379
+      - API_SERVICE_URL=http://api:9001
+      - ROUTING_SERVICE_URL=http://routing:9003
+      - LOG_LEVEL=debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - ridendine_network
+
+  # Routing Service
+  routing:
+    build:
+      context: ./services/routing
+      dockerfile: Dockerfile
+    image: ridendine-routing:latest
+    container_name: ridendine_routing
+    ports:
+      - "9003:9003"
+    environment:
+      - NODE_ENV=development
+      - ROUTING_PORT=9003
+      - REDIS_URL=redis://redis:6379
+      - MAPBOX_TOKEN=${MAPBOX_TOKEN:-}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+      - OSRM_BASE_URL=http://router.project-osrm.org
+      - LOG_LEVEL=debug
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ridendine_network
+
+  # Realtime Gateway (WebSocket)
+  realtime:
+    build:
+      context: ./services/realtime
+      dockerfile: Dockerfile
+    image: ridendine-realtime:latest
+    container_name: ridendine_realtime
+    ports:
+      - "9004:9004"
+    environment:
+      - NODE_ENV=development
+      - REALTIME_PORT=9004
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-jwt-secret-change-in-production
+      - API_SERVICE_URL=http://api:9001
+      - LOG_LEVEL=debug
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - ridendine_network
+
+  # Adminer (Database UI)
   adminer:
     image: adminer:latest
     container_name: ridendine_adminer
     ports:
       - "8080:8080"
-    depends_on:
-      - postgres
     environment:
       ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - ridendine_network
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
+  api_uploads:
+    driver: local
+
+networks:
+  ridendine_network:
+    driver: bridge

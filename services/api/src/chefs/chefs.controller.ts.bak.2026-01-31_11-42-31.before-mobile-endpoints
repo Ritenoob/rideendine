@@ -122,20 +122,4 @@ export class ChefsController {
   async getStripeStatus(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     return this.chefsService.getStripeAccountStatus(user.sub, id);
   }
-
-  @Get(':id/menus')
-  async getChefMenus(@Param('id') id: string) {
-    return this.chefsService.getChefMenus(id);
-  }
-
-  @Get(':id/reviews')
-  async getChefReviews(
-    @Param('id') id: string,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-  ) {
-    const limitNum = limit ? parseInt(limit, 10) : 20;
-    const offsetNum = offset ? parseInt(offset, 10) : 0;
-    return this.chefsService.getChefReviews(id, limitNum, offsetNum);
-  }
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Inject, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Pool } from 'pg';
 import * as bcrypt from 'bcrypt';
 import {
@@ -302,5 +302,498 @@ export class DriversService {
     }
 
     return result.rows[0];
+  }
+
+  async getAvailableOrders(userId: string) {
+    // Get driver details with current location
+    const driverResult = await this.db.query(
+      `SELECT id, current_latitude, current_longitude, verification_status 
+       FROM drivers 
+       WHERE user_id = $1`,
+      [userId],
+    );
+
+    if (driverResult.rows.length === 0) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const driver = driverResult.rows[0];
+
+    if (driver.verification_status !== 'approved') {
+      return [];
+    }
+
+    // Get orders that are ready for pickup but not assigned to a driver
+    const result = await this.db.query(
+      `SELECT 
+        o.id, o.order_number, o.total_cents, o.delivery_fee_cents,
+        o.pickup_address, o.pickup_latitude, o.pickup_longitude,
+        o.delivery_address, o.delivery_latitude, o.delivery_longitude,
+        o.created_at,
+        c.business_name as chef_name
+       FROM orders o
+       JOIN chefs c ON o.chef_id = c.id
+       WHERE o.status = 'ready_for_pickup'
+         AND o.driver_id IS NULL
+       ORDER BY o.created_at ASC
+       LIMIT 20`,
+    );
+
+    // Calculate distance from driver to pickup location
+    return result.rows.map((row) => {
+      const distanceKm = driver.current_latitude && driver.current_longitude
+        ? this.haversineDistance(
+            parseFloat(driver.current_latitude),
+            parseFloat(driver.current_longitude),
+            parseFloat(row.pickup_latitude),
+            parseFloat(row.pickup_longitude),
+          )
+        : 0;
+
+      return {
+        id: row.id,
+        orderNumber: row.order_number,
+        chefName: row.chef_name,
+        pickupAddress: row.pickup_address,
+        pickupLatitude: parseFloat(row.pickup_latitude),
+        pickupLongitude: parseFloat(row.pickup_longitude),
+        deliveryAddress: row.delivery_address,
+        deliveryLatitude: parseFloat(row.delivery_latitude),
+        deliveryLongitude: parseFloat(row.delivery_longitude),
+        totalCents: row.total_cents,
+        estimatedDeliveryFeeCents: row.delivery_fee_cents,
+        distanceKm,
+        createdAt: row.created_at,
+      };
+    }).sort((a, b) => a.distanceKm - b.distanceKm); // Sort by distance
+  }
+
+  async acceptOrder(userId: string, orderId: string, estimatedPickupMinutes?: number) {
+    const client = await this.db.connect();
+    
+    try {
+      await client.query('BEGIN');
+
+      // Get driver
+      const driverResult = await client.query(
+        'SELECT id, verification_status FROM drivers WHERE user_id = $1',
+        [userId],
+      );
+
+      if (driverResult.rows.length === 0) {
+        throw new NotFoundException('Driver not found');
+      }
+
+      const driver = driverResult.rows[0];
+
+      if (driver.verification_status !== 'approved') {
+        throw new BadRequestException('Driver is not verified');
+      }
+
+      // Get order and validate status
+      const orderResult = await client.query(
+        'SELECT id, status, driver_id FROM orders WHERE id = $1 FOR UPDATE',
+        [orderId],
+      );
+
+      if (orderResult.rows.length === 0) {
+        throw new NotFoundException('Order not found');
+      }
+
+      const order = orderResult.rows[0];
+
+      if (order.status !== 'ready_for_pickup') {
+        throw new BadRequestException('Order is not available for pickup');
+      }
+
+      if (order.driver_id) {
+        throw new ConflictException('Order already assigned to another driver');
+      }
+
+      // Assign driver to order
+      await client.query(
+        `UPDATE orders 
+         SET driver_id = $1, 
+             status = 'assigned_to_driver',
+             driver_assigned_at = NOW(),
+             estimated_pickup_at = CASE 
+               WHEN $2 IS NOT NULL THEN NOW() + ($2 || ' minutes')::INTERVAL
+               ELSE NULL
+             END,
+             updated_at = NOW()
+         WHERE id = $3`,
+        [driver.id, estimatedPickupMinutes, orderId],
+      );
+
+      // Log state transition
+      await client.query(
+        `INSERT INTO order_status_history (order_id, status, changed_by_user_id, notes)
+         VALUES ($1, 'assigned_to_driver', $2, 'Driver accepted order')`,
+        [orderId, userId],
+      );
+
+      await client.query('COMMIT');
+
+      return { success: true, orderId };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getActiveDelivery(userId: string) {
+    const driverResult = await this.db.query(
+      'SELECT id FROM drivers WHERE user_id = $1',
+      [userId],
+    );
+
+    if (driverResult.rows.length === 0) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const driverId = driverResult.rows[0].id;
+
+    // Get active order (assigned, picked_up, or in_transit)
+    const result = await this.db.query(
+      `SELECT 
+        o.id, o.order_number, o.status, o.total_cents, o.delivery_fee_cents,
+        o.pickup_address, o.pickup_latitude, o.pickup_longitude,
+        o.delivery_address, o.delivery_latitude, o.delivery_longitude,
+        o.special_instructions, o.driver_assigned_at,
+        c.business_name as chef_name,
+        u.first_name as customer_first_name, u.last_name as customer_last_name,
+        u.phone_number as customer_phone
+       FROM orders o
+       JOIN chefs c ON o.chef_id = c.id
+       JOIN users cu ON o.customer_id = cu.id
+       JOIN users u ON cu.id = u.id
+       WHERE o.driver_id = $1
+         AND o.status IN ('assigned_to_driver', 'picked_up', 'in_transit')
+       ORDER BY o.driver_assigned_at DESC
+       LIMIT 1`,
+      [driverId],
+    );
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const order = result.rows[0];
+
+    // Get order items
+    const itemsResult = await this.db.query(
+      `SELECT name, quantity FROM order_items WHERE order_id = $1`,
+      [order.id],
+    );
+
+    return {
+      orderId: order.id,
+      orderNumber: order.order_number,
+      status: order.status,
+      chefName: order.chef_name,
+      pickupAddress: order.pickup_address,
+      pickupLatitude: parseFloat(order.pickup_latitude),
+      pickupLongitude: parseFloat(order.pickup_longitude),
+      deliveryAddress: order.delivery_address,
+      deliveryLatitude: parseFloat(order.delivery_latitude),
+      deliveryLongitude: parseFloat(order.delivery_longitude),
+      customerName: `${order.customer_first_name} ${order.customer_last_name}`,
+      customerPhone: order.customer_phone,
+      totalCents: order.total_cents,
+      deliveryFeeCents: order.delivery_fee_cents,
+      items: itemsResult.rows,
+      specialInstructions: order.special_instructions,
+      assignedAt: order.driver_assigned_at,
+    };
+  }
+
+  async markPickedUp(userId: string, orderId: string, estimatedDeliveryMinutes?: number) {
+    const client = await this.db.connect();
+    
+    try {
+      await client.query('BEGIN');
+
+      // Verify driver owns this order
+      const driverResult = await client.query(
+        'SELECT id FROM drivers WHERE user_id = $1',
+        [userId],
+      );
+
+      if (driverResult.rows.length === 0) {
+        throw new NotFoundException('Driver not found');
+      }
+
+      const driverId = driverResult.rows[0].id;
+
+      const orderResult = await client.query(
+        'SELECT id, status, driver_id FROM orders WHERE id = $1 FOR UPDATE',
+        [orderId],
+      );
+
+      if (orderResult.rows.length === 0) {
+        throw new NotFoundException('Order not found');
+      }
+
+      const order = orderResult.rows[0];
+
+      if (order.driver_id !== driverId) {
+        throw new ForbiddenException('This order is not assigned to you');
+      }
+
+      if (order.status !== 'assigned_to_driver') {
+        throw new BadRequestException('Order cannot be marked as picked up from current status');
+      }
+
+      // Update order status
+      await client.query(
+        `UPDATE orders 
+         SET status = 'picked_up',
+             picked_up_at = NOW(),
+             estimated_delivery_at = CASE 
+               WHEN $1 IS NOT NULL THEN NOW() + ($1 || ' minutes')::INTERVAL
+               ELSE NULL
+             END,
+             updated_at = NOW()
+         WHERE id = $2`,
+        [estimatedDeliveryMinutes, orderId],
+      );
+
+      // Log state transition
+      await client.query(
+        `INSERT INTO order_status_history (order_id, status, changed_by_user_id, notes)
+         VALUES ($1, 'picked_up', $2, 'Driver picked up order')`,
+        [orderId, userId],
+      );
+
+      await client.query('COMMIT');
+
+      return { success: true, orderId };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async markDelivered(userId: string, orderId: string, deliveryPhotoUrl?: string, notes?: string) {
+    const client = await this.db.connect();
+    
+    try {
+      await client.query('BEGIN');
+
+      // Verify driver owns this order
+      const driverResult = await client.query(
+        'SELECT id FROM drivers WHERE user_id = $1',
+        [userId],
+      );
+
+      if (driverResult.rows.length === 0) {
+        throw new NotFoundException('Driver not found');
+      }
+
+      const driverId = driverResult.rows[0].id;
+
+      const orderResult = await client.query(
+        `SELECT id, status, driver_id, delivery_fee_cents 
+         FROM orders 
+         WHERE id = $1 FOR UPDATE`,
+        [orderId],
+      );
+
+      if (orderResult.rows.length === 0) {
+        throw new NotFoundException('Order not found');
+      }
+
+      const order = orderResult.rows[0];
+
+      if (order.driver_id !== driverId) {
+        throw new ForbiddenException('This order is not assigned to you');
+      }
+
+      if (!['picked_up', 'in_transit'].includes(order.status)) {
+        throw new BadRequestException('Order cannot be marked as delivered from current status');
+      }
+
+      // Update order status
+      await client.query(
+        `UPDATE orders 
+         SET status = 'delivered',
+             delivered_at = NOW(),
+             delivery_photo_url = $1,
+             updated_at = NOW()
+         WHERE id = $2`,
+        [deliveryPhotoUrl, orderId],
+      );
+
+      // Log state transition
+      await client.query(
+        `INSERT INTO order_status_history (order_id, status, changed_by_user_id, notes)
+         VALUES ($1, 'delivered', $2, $3)`,
+        [orderId, userId, notes || 'Driver marked order as delivered'],
+      );
+
+      // Record driver earnings
+      await client.query(
+        `INSERT INTO driver_ledger 
+         (driver_id, order_id, total_earning_cents, payout_status)
+         VALUES ($1, $2, $3, 'pending')`,
+        [driverId, orderId, order.delivery_fee_cents],
+      );
+
+      // Update driver stats
+      await client.query(
+        `UPDATE drivers 
+         SET total_deliveries = total_deliveries + 1,
+             successful_deliveries = successful_deliveries + 1,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [driverId],
+      );
+
+      await client.query('COMMIT');
+
+      return { success: true, orderId };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getEarnings(userId: string, period: string = 'all') {
+    const driverResult = await this.db.query(
+      'SELECT id FROM drivers WHERE user_id = $1',
+      [userId],
+    );
+
+    if (driverResult.rows.length === 0) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const driverId = driverResult.rows[0].id;
+
+    let dateFilter = '';
+    let groupByFormat = 'YYYY-MM-DD';
+
+    switch (period) {
+      case 'today':
+        dateFilter = "AND DATE(dl.created_at) = CURRENT_DATE";
+        groupByFormat = 'HH24:00';
+        break;
+      case 'week':
+        dateFilter = "AND dl.created_at >= NOW() - INTERVAL '7 days'";
+        break;
+      case 'month':
+        dateFilter = "AND dl.created_at >= NOW() - INTERVAL '30 days'";
+        break;
+      default:
+        dateFilter = '';
+    }
+
+    // Get total earnings
+    const totalResult = await this.db.query(
+      `SELECT 
+        COALESCE(SUM(total_earning_cents), 0) as total_earnings,
+        COUNT(*) as delivery_count
+       FROM driver_ledger dl
+       WHERE dl.driver_id = $1 ${dateFilter}`,
+      [driverId],
+    );
+
+    // Get daily breakdown
+    const breakdownResult = await this.db.query(
+      `SELECT 
+        TO_CHAR(dl.created_at, $2) as date,
+        SUM(total_earning_cents) as earnings,
+        COUNT(*) as deliveries
+       FROM driver_ledger dl
+       WHERE dl.driver_id = $1 ${dateFilter}
+       GROUP BY TO_CHAR(dl.created_at, $2)
+       ORDER BY date DESC`,
+      [driverId, groupByFormat],
+    );
+
+    const totalEarnings = parseInt(totalResult.rows[0]?.total_earnings || '0');
+    const deliveryCount = parseInt(totalResult.rows[0]?.delivery_count || '0');
+
+    return {
+      period,
+      totalEarnings,
+      deliveryCount,
+      averagePerDelivery: deliveryCount > 0 ? Math.round(totalEarnings / deliveryCount) : 0,
+      breakdown: breakdownResult.rows.map((row) => ({
+        date: row.date,
+        earnings: parseInt(row.earnings),
+        deliveries: parseInt(row.deliveries),
+      })),
+    };
+  }
+
+  async getDeliveryHistory(userId: string, limit: number = 20) {
+    const driverResult = await this.db.query(
+      'SELECT id FROM drivers WHERE user_id = $1',
+      [userId],
+    );
+
+    if (driverResult.rows.length === 0) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const driverId = driverResult.rows[0].id;
+
+    const result = await this.db.query(
+      `SELECT 
+        o.id, o.order_number, o.delivered_at, o.delivery_fee_cents,
+        o.pickup_latitude, o.pickup_longitude,
+        o.delivery_latitude, o.delivery_longitude,
+        r.rating as customer_rating
+       FROM orders o
+       LEFT JOIN reviews r ON o.id = r.order_id AND r.reviewer_role = 'customer'
+       WHERE o.driver_id = $1
+         AND o.status = 'delivered'
+       ORDER BY o.delivered_at DESC
+       LIMIT $2`,
+      [driverId, limit],
+    );
+
+    return result.rows.map((row) => {
+      const distanceKm = this.haversineDistance(
+        parseFloat(row.pickup_latitude),
+        parseFloat(row.pickup_longitude),
+        parseFloat(row.delivery_latitude),
+        parseFloat(row.delivery_longitude),
+      );
+
+      return {
+        orderId: row.id,
+        orderNumber: row.order_number,
+        completedAt: row.delivered_at,
+        deliveryFeeCents: row.delivery_fee_cents,
+        customerRating: row.customer_rating ? parseFloat(row.customer_rating) : undefined,
+        distanceKm,
+      };
+    });
+  }
+
+  private haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth radius in km
+    const dLat = this.toRad(lat2 - lat1);
+    const dLon = this.toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRad(lat1)) *
+        Math.cos(this.toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  private toRad(degrees: number): number {
+    return degrees * (Math.PI / 180);
   }
 }

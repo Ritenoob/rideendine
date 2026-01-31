@@ -51,12 +51,33 @@ npm run test:cov                # Coverage report
 npm run test:e2e                # End-to-end tests
 ```
 
+### Docker Commands
+
+```bash
+# Docker Compose (Full Stack)
+npm run docker:build            # Build all service images
+npm run docker:build:nocache    # Clean build without cache
+npm run docker:up               # Start all services (attached)
+npm run docker:up:detached      # Start in background
+npm run docker:down             # Stop all services
+npm run docker:restart          # Restart all services
+npm run docker:logs             # View logs from all services
+npm run docker:ps               # Check container status
+npm run docker:clean            # Remove containers, volumes, images
+
+# Individual services
+docker-compose build api        # Build specific service
+docker-compose restart api      # Restart specific service
+docker-compose logs -f api      # Follow logs for service
+```
+
 ### Database Commands
 
 ```bash
 npm run db:up                   # Start Postgres + Redis containers
-npm run db:down                 # Stop containers
-npm run db:migrate              # Apply all SQL migrations
+npm run db:down                 # Stop database containers
+npm run db:migrate              # Apply all SQL migrations (local)
+npm run db:migrate:docker       # Run migrations in Docker container
 npm run db:seed                 # Seed test data
 npm run db:reset                # Full reset: down, up, migrate, seed
 ```
@@ -112,6 +133,7 @@ packages/
 ### NestJS API Structure (services/api/src/)
 
 Modular architecture with feature-based directories:
+
 - `auth/` - JWT authentication, guards
 - `users/` - User management
 - `chefs/` - Chef profiles, menu management
@@ -124,18 +146,18 @@ Modular architecture with feature-based directories:
 
 ### Port Reference
 
-| Port | Service |
-|------|---------|
-| 8081 | Core demo server |
-| 9001 | API service (NestJS) |
-| 9002 | Dispatch service |
-| 9003 | Routing service |
-| 9004 | Realtime gateway |
+| Port | Service                 |
+| ---- | ----------------------- |
+| 8081 | Core demo server        |
+| 9001 | API service (NestJS)    |
+| 9002 | Dispatch service        |
+| 9003 | Routing service         |
+| 9004 | Realtime gateway        |
 | 8010 | Customer web dev server |
-| 8082 | Expo bundler |
-| 5432 | PostgreSQL |
-| 6379 | Redis |
-| 8080 | Adminer (DB UI) |
+| 8082 | Expo bundler            |
+| 5432 | PostgreSQL              |
+| 6379 | Redis                   |
+| 8080 | Adminer (DB UI)         |
 
 ## File Edit Convention
 
@@ -153,11 +175,12 @@ Archived versions are stored in the `edits/` directory.
 - Strict mode enabled with all strict flags
 - Path alias: `@ridendine/shared/*` → `services/shared/*`
 - Decorators enabled for NestJS
-- Test files excluded from compilation (*.spec.ts)
+- Test files excluded from compilation (\*.spec.ts)
 
 ## Environment Variables
 
 Key variables (see `.env.example` for full list):
+
 - `DATABASE_URL` - PostgreSQL connection string
 - `REDIS_URL` - Redis connection string
 - `JWT_SECRET` / `REFRESH_TOKEN_SECRET` - Auth secrets
@@ -170,6 +193,23 @@ Key variables (see `.env.example` for full list):
 - `GET /api/dispatch` - Full state snapshot
 - `POST /api/assign` - Dispatch logic
 - `WebSocket /?token=...` - Real-time updates
+
+## Week 2 Documentation (NEW - 2026-01-31)
+
+**Comprehensive API & Operations Documentation:**
+
+- [docs/API_INTEGRATION_GUIDE.md](docs/API_INTEGRATION_GUIDE.md) - Complete API integration guide (900+ lines, 25+ examples)
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - Deployment procedures for all environments (1000+ lines)
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - 30+ common issues with solutions (700+ lines)
+- [docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md) - Quick reference for developers
+
+**Operational Runbooks:**
+
+- [docs/RUNBOOK_SERVICE_RESTART.md](docs/RUNBOOK_SERVICE_RESTART.md) - Graceful service restart procedures
+- [docs/RUNBOOK_DATABASE_RECOVERY.md](docs/RUNBOOK_DATABASE_RECOVERY.md) - Database disaster recovery
+- [docs/RUNBOOK_PERFORMANCE_DEGRADATION.md](docs/RUNBOOK_PERFORMANCE_DEGRADATION.md) - Performance troubleshooting
+- [docs/RUNBOOK_SCALING.md](docs/RUNBOOK_SCALING.md) - Horizontal and vertical scaling
+- [docs/RUNBOOK_EMERGENCY_PROCEDURES.md](docs/RUNBOOK_EMERGENCY_PROCEDURES.md) - Critical incident response
 
 ## Testing
 

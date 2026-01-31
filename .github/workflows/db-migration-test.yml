@@ -1,0 +1,255 @@
+name: Database Migration Tests
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'database/migrations/**'
+      - 'database/seeds/**'
+      - '.github/workflows/db-migration-test.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'database/migrations/**'
+      - 'database/seeds/**'
+
+jobs:
+  migration-test:
+    name: Test Database Migrations
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ridendine
+          POSTGRES_PASSWORD: ridendine_test_password
+          POSTGRES_DB: ridendine_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5432 -U ridendine; do
+            echo "Waiting for PostgreSQL to be ready..."
+            sleep 2
+          done
+
+      - name: List migration files
+        run: |
+          echo "Migration files to be applied:"
+          ls -lh database/migrations/
+
+      - name: Run all migrations
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: postgresql://ridendine:ridendine_test_password@localhost:5432/ridendine_test
+
+      - name: Verify migration success
+        run: |
+          PGPASSWORD=ridendine_test_password psql -h localhost -U ridendine -d ridendine_test -c "\dt"
+
+      - name: Check required tables exist
+        run: |
+          PGPASSWORD=ridendine_test_password psql -h localhost -U ridendine -d ridendine_test <<EOF
+          SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;
+          EOF
+
+      - name: Verify users table structure
+        run: |
+          PGPASSWORD=ridendine_test_password psql -h localhost -U ridendine -d ridendine_test -c "\d users"
+
+      - name: Verify orders table structure
+        run: |
+          PGPASSWORD=ridendine_test_password psql -h localhost -U ridendine -d ridendine_test -c "\d orders"
+
+      - name: Verify indexes exist
+        run: |
+          PGPASSWORD=ridendine_test_password psql -h localhost -U ridendine -d ridendine_test <<EOF
+          SELECT indexname, tablename FROM pg_indexes WHERE schemaname = 'public' ORDER BY tablename, indexname;
+          EOF
+
+      - name: Check constraints
+        run: |
+          PGPASSWORD=ridendine_test_password psql -h localhost -U ridendine -d ridendine_test <<EOF
+          SELECT conname, contype, conrelid::regclass AS table_name
+          FROM pg_constraint
+          WHERE connamespace = 'public'::regnamespace
+          ORDER BY conrelid::regclass::text, conname;
+          EOF
+
+      - name: Test seed data (optional)
+        run: npm run db:seed
+        continue-on-error: true
+        env:
+          DATABASE_URL: postgresql://ridendine:ridendine_test_password@localhost:5432/ridendine_test
+
+      - name: Verify row counts after seeding
+        run: |
+          PGPASSWORD=ridendine_test_password psql -h localhost -U ridendine -d ridendine_test <<EOF
+          SELECT 'users' AS table_name, COUNT(*) AS row_count FROM users
+          UNION ALL
+          SELECT 'chefs', COUNT(*) FROM chefs
+          UNION ALL
+          SELECT 'drivers', COUNT(*) FROM drivers
+          UNION ALL
+          SELECT 'customers', COUNT(*) FROM customers
+          UNION ALL
+          SELECT 'orders', COUNT(*) FROM orders;
+          EOF
+        continue-on-error: true
+
+  migration-rollback-test:
+    name: Test Migration Rollback (Future)
+    runs-on: ubuntu-latest
+    needs: migration-test
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ridendine
+          POSTGRES_PASSWORD: ridendine_test_password
+          POSTGRES_DB: ridendine_rollback_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run migrations
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: postgresql://ridendine:ridendine_test_password@localhost:5432/ridendine_rollback_test
+
+      - name: Placeholder for rollback test
+        run: |
+          echo "Migration rollback testing will be implemented when rollback scripts are available"
+          echo "For now, we verify migrations run successfully in forward direction"
+
+  migration-performance:
+    name: Test Migration Performance
+    runs-on: ubuntu-latest
+    needs: migration-test
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ridendine
+          POSTGRES_PASSWORD: ridendine_test_password
+          POSTGRES_DB: ridendine_perf_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run migrations with timing
+        run: |
+          START_TIME=$(date +%s)
+          npm run db:migrate
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "Migration completed in ${DURATION} seconds"
+          if [ $DURATION -gt 30 ]; then
+            echo "Warning: Migrations took longer than 30 seconds"
+            exit 1
+          fi
+        env:
+          DATABASE_URL: postgresql://ridendine:ridendine_test_password@localhost:5432/ridendine_perf_test
+
+  migration-docs:
+    name: Verify Migration Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check migration file naming
+        run: |
+          echo "Checking migration file naming convention..."
+          for file in database/migrations/*.sql; do
+            if [[ ! $(basename "$file") =~ ^[0-9]{3}_.*\.sql$ ]]; then
+              echo "Error: $file does not follow naming convention: NNN_description.sql"
+              exit 1
+            fi
+          done
+          echo "All migration files follow naming convention"
+
+      - name: Check for migration comments
+        run: |
+          echo "Checking for descriptive comments in migration files..."
+          for file in database/migrations/*.sql; do
+            if ! grep -q "^--" "$file"; then
+              echo "Warning: $file may be missing descriptive comments"
+            fi
+          done
+
+      - name: Generate migration report
+        run: |
+          echo "# Migration Report" > migration-report.md
+          echo "" >> migration-report.md
+          echo "Total migrations: $(ls -1 database/migrations/*.sql | wc -l)" >> migration-report.md
+          echo "" >> migration-report.md
+          echo "## Migration Files:" >> migration-report.md
+          for file in database/migrations/*.sql; do
+            echo "- $(basename $file)" >> migration-report.md
+          done
+          cat migration-report.md
+
+      - name: Upload migration report
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-report
+          path: migration-report.md
+          retention-days: 30

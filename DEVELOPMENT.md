@@ -93,6 +93,7 @@ curl http://localhost:9001/health
 The API is now running at `http://localhost:9001`.
 
 **Next steps:**
+
 - Access API docs: `http://localhost:9001/api/docs` (Swagger UI)
 - Start mobile app: `cd apps/customer-mobile && npx expo start`
 - View database: Adminer at `http://localhost:8080`
@@ -117,6 +118,7 @@ npm install
 ```
 
 This installs dependencies for:
+
 - Root workspace
 - `services/api` (NestJS API)
 - `services/dispatch` (Dispatch service)
@@ -186,6 +188,7 @@ docker compose up -d
 ```
 
 This starts:
+
 - **PostgreSQL** on port 5432
 - **Redis** on port 6379
 - **Adminer** (DB GUI) on port 8080
@@ -234,6 +237,7 @@ npm run db:migrate
 ```
 
 This runs all SQL files in `database/migrations/`:
+
 - `001_initial_schema.sql` - Core tables
 - `002_chef_enhancements.sql` - Chef features
 - `003_admin_actions.sql` - Admin audit log
@@ -254,6 +258,7 @@ npm run db:seed
 ```
 
 This creates:
+
 - 3 test customers
 - 5 test chefs with menus
 - 2 test drivers
@@ -261,12 +266,172 @@ This creates:
 - Sample menu items
 
 **Test accounts created:**
+
 - Customer: `customer@test.com` / `password123`
 - Chef: `chef@test.com` / `password123`
 - Driver: `driver@test.com` / `password123`
 - Admin: `admin@test.com` / `password123`
 
 ---
+
+## Docker-Based Development (Recommended)
+
+### Full Stack with Docker Compose
+
+The recommended way to run RideNDine is using Docker Compose, which handles all services, databases, and networking:
+
+```bash
+# Build all Docker images
+npm run docker:build
+
+# Start all services (API, Dispatch, Routing, Realtime, PostgreSQL, Redis, Adminer)
+npm run docker:up
+
+# Start in background (detached mode)
+npm run docker:up:detached
+
+# View logs from all services
+npm run docker:logs
+
+# View logs from specific service
+docker-compose logs -f api
+
+# Check service health status
+npm run docker:ps
+
+# Stop all services
+npm run docker:down
+
+# Restart specific service
+docker-compose restart api
+
+# Clean up (remove volumes and images)
+npm run docker:clean
+```
+
+**What gets started:**
+
+| Service    | Port | Container Name     | Description              |
+| ---------- | ---- | ------------------ | ------------------------ |
+| API        | 9001 | ridendine_api      | Main NestJS API          |
+| Dispatch   | 9002 | ridendine_dispatch | Order assignment service |
+| Routing    | 9003 | ridendine_routing  | Route calculation        |
+| Realtime   | 9004 | ridendine_realtime | WebSocket gateway        |
+| PostgreSQL | 5432 | ridendine_postgres | Database                 |
+| Redis      | 6379 | ridendine_redis    | Cache & pub/sub          |
+| Adminer    | 8080 | ridendine_adminer  | Database UI              |
+
+**Health Checks:**
+
+All services include health checks. Verify they're healthy:
+
+```bash
+# Check all containers
+docker-compose ps
+
+# Test API health endpoint
+curl http://localhost:9001/health
+
+# Should return:
+# {
+#   "status": "ok",
+#   "timestamp": "2026-01-31T...",
+#   "database": "connected",
+#   "redis": "connected"
+# }
+```
+
+**Database Migrations:**
+
+Migrations run automatically when PostgreSQL container starts. To manually run migrations:
+
+```bash
+# Run migrations in Docker
+npm run db:migrate:docker
+
+# Or run migration script locally
+npm run db:migrate
+```
+
+**Rebuild After Code Changes:**
+
+When you modify service code:
+
+```bash
+# Stop services
+npm run docker:down
+
+# Rebuild images (with changes)
+npm run docker:build
+
+# Start fresh
+npm run docker:up
+```
+
+For faster iteration during development, see "Hybrid Development" below.
+
+### Docker Image Build Details
+
+Each service uses optimized multi-stage Dockerfiles:
+
+- **API Service**: Multi-stage build (builder + runtime)
+  - Build stage: Compiles TypeScript, installs dependencies
+  - Runtime stage: Minimal Alpine image with only production deps
+  - Non-root user for security
+  - Health check included
+
+- **Other Services**: Lightweight Node.js Alpine images
+  - Minimal dependencies
+  - Health checks for monitoring
+  - Non-root execution
+
+**Image sizes:**
+
+```bash
+# Check image sizes
+docker images | grep ridendine
+
+# Expected sizes:
+# ridendine-api:latest        ~300MB
+# ridendine-dispatch:latest   ~150MB
+# ridendine-routing:latest    ~150MB
+# ridendine-realtime:latest   ~150MB
+```
+
+**Building without cache (clean build):**
+
+```bash
+npm run docker:build:nocache
+```
+
+### Hybrid Development (Faster Iteration)
+
+For active development, run databases in Docker but services locally for hot-reload:
+
+```bash
+# Terminal 1: Start only databases
+npm run db:up
+
+# Terminal 2: Run API with hot reload
+npm run dev:api
+
+# Terminal 3: Run Dispatch service
+npm run dev:dispatch
+
+# Terminal 4: Run Routing service
+npm run dev:routing
+
+# Terminal 5: Run Realtime gateway
+npm run dev:realtime
+```
+
+This gives you instant code reload without rebuilding Docker images.
+
+**Stop databases when done:**
+
+```bash
+npm run db:down
+```
 
 ## Running Services
 
@@ -291,6 +456,7 @@ npm run start:prod
 ```
 
 **Endpoints:**
+
 - API: `http://localhost:9001`
 - Health check: `http://localhost:9001/health`
 - Swagger docs: `http://localhost:9001/api/docs`
@@ -545,6 +711,7 @@ npm run lint:fix
 ### Pre-commit Hooks
 
 Husky runs pre-commit hooks automatically:
+
 - ESLint
 - Prettier
 - TypeScript compilation check
@@ -594,6 +761,59 @@ kill $(lsof -t -i :9001)
 
 # Or use different port
 API_PORT=9002 npm run dev:api
+
+# Kill all RideNDine services
+lsof -i :9001 -i :9002 -i :9003 -i :9004 | awk 'NR>1 {print $2}' | xargs kill
+```
+
+### Docker Container Not Starting
+
+```bash
+# View container logs
+docker-compose logs api
+
+# Check health status
+docker inspect ridendine_api | grep -A 10 Health
+
+# Rebuild specific service
+docker-compose build api
+docker-compose up api
+
+# Complete rebuild
+npm run docker:down
+npm run docker:build:nocache
+npm run docker:up
+```
+
+### Container Shows "Unhealthy" Status
+
+```bash
+# Check health check details
+docker inspect ridendine_api
+
+# View recent logs
+docker-compose logs --tail=100 api
+
+# Test health endpoint manually
+curl http://localhost:9001/health
+
+# Common causes:
+# - Database not ready yet (wait 30s for health checks)
+# - Missing environment variables
+# - Port conflict
+```
+
+### Docker Out of Memory
+
+```bash
+# Check Docker resource usage
+docker stats
+
+# Increase Docker memory (Docker Desktop → Preferences → Resources)
+# Recommended: 4GB minimum, 8GB for full stack
+
+# Clean up unused resources
+docker system prune -a --volumes
 ```
 
 ### Database Connection Failed

@@ -97,7 +97,9 @@ export class AdminService {
 
   async getRecentActivity(limit: number = 50): Promise<{ activities: ActivityItem[] }> {
     // Combine recent admin actions and order status changes into an activity feed
-    const result = await this.db.query<ActivityItem & { action_type?: string; target_type?: string; details?: any }>(
+    const result = await this.db.query<
+      ActivityItem & { action_type?: string; target_type?: string; details?: any }
+    >(
       `
       (
         SELECT
@@ -206,7 +208,12 @@ export class AdminService {
     };
   }
 
-  async updateChefStatus(chefId: string, status: 'approved' | 'rejected', reason?: string, adminId?: string) {
+  async updateChefStatus(
+    chefId: string,
+    status: 'approved' | 'rejected',
+    reason?: string,
+    adminId?: string,
+  ) {
     const client = await this.db.connect();
     try {
       await client.query('BEGIN');
@@ -364,7 +371,8 @@ export class AdminService {
     const values: (string | number)[] = [];
     let paramIndex = 1;
 
-    let countSql = 'SELECT COUNT(*) as total FROM users u LEFT JOIN user_profiles up ON u.id = up.user_id WHERE 1=1';
+    let countSql =
+      'SELECT COUNT(*) as total FROM users u LEFT JOIN user_profiles up ON u.id = up.user_id WHERE 1=1';
     let sql = `
       SELECT u.id, u.email, u.role, u.is_verified, u.created_at,
              up.first_name, up.last_name, up.phone, up.avatar_url
@@ -463,12 +471,7 @@ export class AdminService {
           VALUES ($1, $2, $3, $4, NOW())
           ON CONFLICT (user_id) DO UPDATE SET ${profileUpdates.join(', ')}
         `,
-          [
-            userId,
-            data.first_name ?? null,
-            data.last_name ?? null,
-            data.phone ?? null,
-          ],
+          [userId, data.first_name ?? null, data.last_name ?? null, data.phone ?? null],
         );
       }
 
@@ -629,22 +632,17 @@ export class AdminService {
     // Get additional role-specific info
     let roleData = null;
     if (user.role === 'chef') {
-      const chefResult = await this.db.query(
-        'SELECT * FROM chefs WHERE user_id = $1',
-        [userId],
-      );
+      const chefResult = await this.db.query('SELECT * FROM chefs WHERE user_id = $1', [userId]);
       roleData = chefResult.rows[0] || null;
     } else if (user.role === 'driver') {
-      const driverResult = await this.db.query(
-        'SELECT * FROM drivers WHERE user_id = $1',
-        [userId],
-      );
+      const driverResult = await this.db.query('SELECT * FROM drivers WHERE user_id = $1', [
+        userId,
+      ]);
       roleData = driverResult.rows[0] || null;
     } else if (user.role === 'customer') {
-      const customerResult = await this.db.query(
-        'SELECT * FROM customers WHERE user_id = $1',
-        [userId],
-      );
+      const customerResult = await this.db.query('SELECT * FROM customers WHERE user_id = $1', [
+        userId,
+      ]);
       roleData = customerResult.rows[0] || null;
     }
 
@@ -695,7 +693,10 @@ export class AdminService {
     }
 
     // Get total count
-    const countResult = await this.db.query(countSql, values.slice(0, search ? paramIndex - 1 : values.length));
+    const countResult = await this.db.query(
+      countSql,
+      values.slice(0, search ? paramIndex - 1 : values.length),
+    );
     const total = parseInt(countResult.rows[0].total, 10);
 
     // Get paginated results
@@ -751,7 +752,9 @@ export class AdminService {
     );
 
     // Get payment info
-    const paymentResult = await this.db.query('SELECT * FROM payments WHERE order_id = $1', [orderId]);
+    const paymentResult = await this.db.query('SELECT * FROM payments WHERE order_id = $1', [
+      orderId,
+    ]);
 
     // Get status history
     const historyResult = await this.db.query(
@@ -820,7 +823,11 @@ export class AdminService {
       }
 
       await client.query('COMMIT');
-      return { success: true, message: 'Order refunded successfully', refundedAmount: order.total_cents };
+      return {
+        success: true,
+        message: 'Order refunded successfully',
+        refundedAmount: order.total_cents,
+      };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -1080,7 +1087,10 @@ export class AdminService {
     return { settings: DEFAULT_SETTINGS };
   }
 
-  async updateSettings(data: UpdateSettingsDto, adminId?: string): Promise<{ settings: PlatformSettings }> {
+  async updateSettings(
+    data: UpdateSettingsDto,
+    adminId?: string,
+  ): Promise<{ settings: PlatformSettings }> {
     const client = await this.db.connect();
     try {
       await client.query('BEGIN');

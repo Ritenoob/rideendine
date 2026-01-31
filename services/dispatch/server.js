@@ -1,5 +1,5 @@
-const http = require("http");
-const { URL } = require("url");
+const http = require('http');
+const { URL } = require('url');
 
 const PORT = process.env.PORT || 9002;
 
@@ -10,9 +10,7 @@ function haversine(a, b) {
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);
   const lat2 = toRad(b.lat);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
@@ -51,13 +49,13 @@ function assignDrivers(payload) {
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => {
+    let body = '';
+    req.on('data', (chunk) => {
       body += chunk;
     });
-    req.on("end", () => {
+    req.on('end', () => {
       try {
-        resolve(JSON.parse(body || "{}"));
+        resolve(JSON.parse(body || '{}'));
       } catch (err) {
         reject(err);
       }
@@ -66,24 +64,24 @@ function readJson(req) {
 }
 
 const server = http.createServer(async (req, res) => {
-  res.setHeader("Content-Type", "application/json");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
 
-  if (req.method === "OPTIONS") {
+  if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.end();
     return;
   }
 
-  if (req.method === "GET" && req.url === "/health") {
+  if (req.method === 'GET' && req.url === '/health') {
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, service: "dispatch" }));
+    res.end(JSON.stringify({ ok: true, service: 'dispatch' }));
     return;
   }
 
-  if (req.method === "POST" && req.url === "/assign") {
+  if (req.method === 'POST' && req.url === '/assign') {
     try {
       const payload = await readJson(req);
       const assignments = assignDrivers(payload);
@@ -91,20 +89,20 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ assignments }));
     } catch (err) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "invalid payload" }));
+      res.end(JSON.stringify({ error: 'invalid payload' }));
     }
     return;
   }
 
-  if (req.method === "GET" && req.url.startsWith("/healthz")) {
-    const url = new URL(req.url, "http://localhost");
+  if (req.method === 'GET' && req.url.startsWith('/healthz')) {
+    const url = new URL(req.url, 'http://localhost');
     res.statusCode = 200;
     res.end(JSON.stringify({ ok: true, query: Object.fromEntries(url.searchParams) }));
     return;
   }
 
   res.statusCode = 404;
-  res.end(JSON.stringify({ error: "not found" }));
+  res.end(JSON.stringify({ error: 'not found' }));
 });
 
 server.listen(PORT, () => {

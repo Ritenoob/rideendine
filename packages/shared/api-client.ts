@@ -41,7 +41,7 @@ export class ApiClient {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    requiresAuth = true
+    requiresAuth = true,
   ): Promise<T> {
     const url = `${this.config.baseUrl}${endpoint}`;
     const headers: Record<string, string> = {
@@ -130,19 +130,27 @@ export class ApiClient {
     role: 'customer' | 'home_chef' | 'driver',
     firstName?: string,
     lastName?: string,
-    phone?: string
+    phone?: string,
   ): Promise<ApiResponse<{ user: User }>> {
-    return this.request('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, role, firstName, lastName, phone }),
-    }, false);
+    return this.request(
+      '/auth/register',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password, role, firstName, lastName, phone }),
+      },
+      false,
+    );
   }
 
   async login(email: string, password: string): Promise<ApiResponse<AuthResponse>> {
-    const response = await this.request<ApiResponse<AuthResponse>>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    }, false);
+    const response = await this.request<ApiResponse<AuthResponse>>(
+      '/auth/login',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      },
+      false,
+    );
 
     if (response.success && response.data) {
       this.config.setTokens(response.data.accessToken, response.data.refreshToken);
@@ -189,7 +197,11 @@ export class ApiClient {
     return this.request(`/chefs/${chefId}/menus`, {}, false);
   }
 
-  async getChefReviews(chefId: string, page = 1, perPage = 20): Promise<ApiResponse<PaginatedResponse<Review>>> {
+  async getChefReviews(
+    chefId: string,
+    page = 1,
+    perPage = 20,
+  ): Promise<ApiResponse<PaginatedResponse<Review>>> {
     return this.request(`/chefs/${chefId}/reviews?page=${page}&perPage=${perPage}`, {}, false);
   }
 
@@ -222,11 +234,13 @@ export class ApiClient {
     return this.request(`/chefs/${chefId}/stripe/onboard`, { method: 'POST' });
   }
 
-  async getStripeStatus(chefId: string): Promise<ApiResponse<{
-    connected: boolean;
-    chargesEnabled: boolean;
-    payoutsEnabled: boolean
-  }>> {
+  async getStripeStatus(chefId: string): Promise<
+    ApiResponse<{
+      connected: boolean;
+      chargesEnabled: boolean;
+      payoutsEnabled: boolean;
+    }>
+  > {
     return this.request(`/chefs/${chefId}/stripe/status`);
   }
 
@@ -235,10 +249,13 @@ export class ApiClient {
   }
 
   // ============ Menus ============
-  async createMenu(chefId: string, data: {
-    name: string;
-    description?: string
-  }): Promise<ApiResponse<Menu>> {
+  async createMenu(
+    chefId: string,
+    data: {
+      name: string;
+      description?: string;
+    },
+  ): Promise<ApiResponse<Menu>> {
     return this.request(`/chefs/${chefId}/menus`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -256,14 +273,17 @@ export class ApiClient {
     return this.request(`/menus/${menuId}`, { method: 'DELETE' });
   }
 
-  async createMenuItem(menuId: string, data: {
-    name: string;
-    description?: string;
-    priceCents: number;
-    preparationTimeMinutes?: number;
-    allergens?: string[];
-    dietaryTags?: string[];
-  }): Promise<ApiResponse<MenuItem>> {
+  async createMenuItem(
+    menuId: string,
+    data: {
+      name: string;
+      description?: string;
+      priceCents: number;
+      preparationTimeMinutes?: number;
+      allergens?: string[];
+      dietaryTags?: string[];
+    },
+  ): Promise<ApiResponse<MenuItem>> {
     return this.request(`/menus/${menuId}/items`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -375,7 +395,11 @@ export class ApiClient {
     });
   }
 
-  async updateDriverLocation(latitude: number, longitude: number, heading?: number): Promise<ApiResponse<void>> {
+  async updateDriverLocation(
+    latitude: number,
+    longitude: number,
+    heading?: number,
+  ): Promise<ApiResponse<void>> {
     return this.request('/drivers/location', {
       method: 'POST',
       body: JSON.stringify({ latitude, longitude, heading }),
@@ -402,7 +426,10 @@ export class ApiClient {
     return this.request('/drivers/earnings');
   }
 
-  async getDriverDeliveryHistory(page = 1, perPage = 20): Promise<ApiResponse<PaginatedResponse<Order>>> {
+  async getDriverDeliveryHistory(
+    page = 1,
+    perPage = 20,
+  ): Promise<ApiResponse<PaginatedResponse<Order>>> {
     return this.request(`/drivers/deliveries?page=${page}&perPage=${perPage}`);
   }
 
@@ -430,12 +457,15 @@ export class ApiClient {
   }
 
   // ============ Reviews ============
-  async createReview(orderId: string, data: {
-    foodRating: number;
-    deliveryRating?: number;
-    overallRating: number;
-    comment?: string;
-  }): Promise<ApiResponse<Review>> {
+  async createReview(
+    orderId: string,
+    data: {
+      foodRating: number;
+      deliveryRating?: number;
+      overallRating: number;
+      comment?: string;
+    },
+  ): Promise<ApiResponse<Review>> {
     return this.request(`/orders/${orderId}/review`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -450,7 +480,7 @@ export class ApiClient {
   async getChefTransactions(
     chefId: string,
     page = 1,
-    perPage = 20
+    perPage = 20,
   ): Promise<ApiResponse<PaginatedResponse<EarningsTransaction>>> {
     return this.request(`/chefs/${chefId}/transactions?page=${page}&perPage=${perPage}`);
   }
@@ -460,7 +490,11 @@ export class ApiClient {
     return this.request('/admin/chefs/pending');
   }
 
-  async verifyChef(chefId: string, status: 'approved' | 'rejected', notes?: string): Promise<ApiResponse<Chef>> {
+  async verifyChef(
+    chefId: string,
+    status: 'approved' | 'rejected',
+    notes?: string,
+  ): Promise<ApiResponse<Chef>> {
     return this.request(`/admin/chefs/${chefId}/verify`, {
       method: 'PATCH',
       body: JSON.stringify({ status, notes }),
@@ -471,7 +505,11 @@ export class ApiClient {
     return this.request('/admin/drivers/pending');
   }
 
-  async verifyDriver(driverId: string, status: 'approved' | 'rejected', notes?: string): Promise<ApiResponse<Driver>> {
+  async verifyDriver(
+    driverId: string,
+    status: 'approved' | 'rejected',
+    notes?: string,
+  ): Promise<ApiResponse<Driver>> {
     return this.request(`/admin/drivers/${driverId}/verify`, {
       method: 'PATCH',
       body: JSON.stringify({ status, notes }),

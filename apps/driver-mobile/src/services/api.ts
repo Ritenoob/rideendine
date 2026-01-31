@@ -43,13 +43,10 @@ class ApiService {
 
   // Auth
   async login(email: string, password: string) {
-    return this.request<{ user: any; accessToken: string; refreshToken: string }>(
-      '/auth/login',
-      {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      }
-    );
+    return this.request<{ user: any; accessToken: string; refreshToken: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
   }
 
   async register(data: { email: string; password: string; firstName?: string; lastName?: string }) {
@@ -110,7 +107,7 @@ class ApiService {
   async getEarnings(period?: 'today' | 'week' | 'month') {
     const query = period ? `?period=${period}` : '';
     return this.request<{ total: number; deliveries: number; tips: number }>(
-      `/drivers/me/earnings${query}`
+      `/drivers/me/earnings${query}`,
     );
   }
 

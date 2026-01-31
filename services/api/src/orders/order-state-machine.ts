@@ -15,10 +15,7 @@ export enum OrderStatus {
 
 export class OrderStateMachine {
   private static readonly transitions: Record<OrderStatus, OrderStatus[]> = {
-    [OrderStatus.PENDING]: [
-      OrderStatus.PAYMENT_CONFIRMED,
-      OrderStatus.CANCELLED,
-    ],
+    [OrderStatus.PENDING]: [OrderStatus.PAYMENT_CONFIRMED, OrderStatus.CANCELLED],
     [OrderStatus.PAYMENT_CONFIRMED]: [
       OrderStatus.ACCEPTED,
       OrderStatus.REJECTED,
@@ -29,33 +26,18 @@ export class OrderStateMachine {
       OrderStatus.READY_FOR_PICKUP,
       OrderStatus.CANCELLED,
     ],
-    [OrderStatus.PREPARING]: [
-      OrderStatus.READY_FOR_PICKUP,
-      OrderStatus.CANCELLED,
-    ],
-    [OrderStatus.READY_FOR_PICKUP]: [
-      OrderStatus.ASSIGNED_TO_DRIVER,
-      OrderStatus.CANCELLED,
-    ],
+    [OrderStatus.PREPARING]: [OrderStatus.READY_FOR_PICKUP, OrderStatus.CANCELLED],
+    [OrderStatus.READY_FOR_PICKUP]: [OrderStatus.ASSIGNED_TO_DRIVER, OrderStatus.CANCELLED],
     [OrderStatus.ASSIGNED_TO_DRIVER]: [
       OrderStatus.PICKED_UP,
       OrderStatus.READY_FOR_PICKUP, // driver unassigned
       OrderStatus.CANCELLED,
     ],
-    [OrderStatus.PICKED_UP]: [
-      OrderStatus.IN_TRANSIT,
-      OrderStatus.DELIVERED,
-    ],
-    [OrderStatus.IN_TRANSIT]: [
-      OrderStatus.DELIVERED,
-    ],
+    [OrderStatus.PICKED_UP]: [OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED],
+    [OrderStatus.IN_TRANSIT]: [OrderStatus.DELIVERED],
     [OrderStatus.DELIVERED]: [], // terminal state
-    [OrderStatus.CANCELLED]: [
-      OrderStatus.REFUNDED,
-    ],
-    [OrderStatus.REJECTED]: [
-      OrderStatus.REFUNDED,
-    ],
+    [OrderStatus.CANCELLED]: [OrderStatus.REFUNDED],
+    [OrderStatus.REJECTED]: [OrderStatus.REFUNDED],
     [OrderStatus.REFUNDED]: [], // terminal state
   };
 
@@ -115,7 +97,7 @@ export class OrderStateMachine {
     if (!this.canTransition(from, to)) {
       throw new Error(
         `Invalid state transition from ${from} to ${to}. ` +
-        `Valid transitions are: ${this.getValidTransitions(from).join(', ')}`
+          `Valid transitions are: ${this.getValidTransitions(from).join(', ')}`,
       );
     }
   }

@@ -1,3 +1,4 @@
+/* eslint-env browser */
 const { useMemo, useState } = React;
 
 const mock = {
@@ -45,7 +46,11 @@ function AdminApp() {
   const filteredOrders = useMemo(() => {
     const q = orderQuery.toLowerCase();
     return orders.filter((o) =>
-      [o.id, o.order_number, o.status].some((v) => String(v || '').toLowerCase().includes(q))
+      [o.id, o.order_number, o.status].some((v) =>
+        String(v || '')
+          .toLowerCase()
+          .includes(q),
+      ),
     );
   }, [orderQuery, orders]);
 
@@ -72,10 +77,26 @@ function AdminApp() {
     setStatus('Refreshing data...');
     try {
       const [chefRes, driverRes, orderRes, reviewRes] = await Promise.all([
-        apiFetch(apiBase, `/admin/chefs${chefFilter !== 'all' ? `?status=${chefFilter}` : ''}`, token),
-        apiFetch(apiBase, `/admin/drivers${driverFilter !== 'all' ? `?status=${driverFilter}` : ''}`, token),
-        apiFetch(apiBase, `/admin/orders${orderFilter !== 'all' ? `?status=${orderFilter}` : ''}`, token),
-        apiFetch(apiBase, `/admin/reviews${reviewFilter !== 'all' ? `?revieweeType=${reviewFilter}` : ''}`, token),
+        apiFetch(
+          apiBase,
+          `/admin/chefs${chefFilter !== 'all' ? `?status=${chefFilter}` : ''}`,
+          token,
+        ),
+        apiFetch(
+          apiBase,
+          `/admin/drivers${driverFilter !== 'all' ? `?status=${driverFilter}` : ''}`,
+          token,
+        ),
+        apiFetch(
+          apiBase,
+          `/admin/orders${orderFilter !== 'all' ? `?status=${orderFilter}` : ''}`,
+          token,
+        ),
+        apiFetch(
+          apiBase,
+          `/admin/reviews${reviewFilter !== 'all' ? `?revieweeType=${reviewFilter}` : ''}`,
+          token,
+        ),
       ]);
       setChefs(chefRes.chefs || []);
       setDrivers(driverRes.drivers || []);
@@ -109,20 +130,60 @@ function AdminApp() {
         <div className="sub">{status || 'Idle'}</div>
       </header>
       <div className="auth-bar">
-        <input value={apiBase} onChange={(e) => setApiBase(e.target.value)} placeholder="API Base URL" />
+        <input
+          value={apiBase}
+          onChange={(e) => setApiBase(e.target.value)}
+          placeholder="API Base URL"
+        />
         <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin email" />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="password" />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="password"
+        />
         <button onClick={login}>Login</button>
-        <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="access token" />
-        <button onClick={refreshAll} disabled={loading}>Refresh</button>
+        <input
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          placeholder="access token"
+        />
+        <button onClick={refreshAll} disabled={loading}>
+          Refresh
+        </button>
       </div>
       <div className="container">
         <nav>
-          <button className={section === 'dashboard' ? 'active' : ''} onClick={() => setSection('dashboard')}>Dashboard</button>
-          <button className={section === 'chefs' ? 'active' : ''} onClick={() => setSection('chefs')}>Chef Approvals</button>
-          <button className={section === 'drivers' ? 'active' : ''} onClick={() => setSection('drivers')}>Driver Ops</button>
-          <button className={section === 'orders' ? 'active' : ''} onClick={() => setSection('orders')}>Orders</button>
-          <button className={section === 'reviews' ? 'active' : ''} onClick={() => setSection('reviews')}>Reviews</button>
+          <button
+            className={section === 'dashboard' ? 'active' : ''}
+            onClick={() => setSection('dashboard')}
+          >
+            Dashboard
+          </button>
+          <button
+            className={section === 'chefs' ? 'active' : ''}
+            onClick={() => setSection('chefs')}
+          >
+            Chef Approvals
+          </button>
+          <button
+            className={section === 'drivers' ? 'active' : ''}
+            onClick={() => setSection('drivers')}
+          >
+            Driver Ops
+          </button>
+          <button
+            className={section === 'orders' ? 'active' : ''}
+            onClick={() => setSection('orders')}
+          >
+            Orders
+          </button>
+          <button
+            className={section === 'reviews' ? 'active' : ''}
+            onClick={() => setSection('reviews')}
+          >
+            Reviews
+          </button>
         </nav>
         <div className="main">
           {section === 'dashboard' && (
@@ -176,10 +237,21 @@ function AdminApp() {
                       <td>{c.business_name || c.name}</td>
                       <td>{c.address || '-'}</td>
                       <td>{Number(c.rating || 0).toFixed(1)}</td>
-                      <td><span className={`badge ${c.verification_status || 'pending'}`}>{c.verification_status || 'pending'}</span></td>
+                      <td>
+                        <span className={`badge ${c.verification_status || 'pending'}`}>
+                          {c.verification_status || 'pending'}
+                        </span>
+                      </td>
                       <td className="actions">
-                        <button className="approve" onClick={() => updateChefStatus(c.id, 'approve')}>Approve</button>
-                        <button className="reject" onClick={() => updateChefStatus(c.id, 'reject')}>Reject</button>
+                        <button
+                          className="approve"
+                          onClick={() => updateChefStatus(c.id, 'approve')}
+                        >
+                          Approve
+                        </button>
+                        <button className="reject" onClick={() => updateChefStatus(c.id, 'reject')}>
+                          Reject
+                        </button>
                         <button className="view">View</button>
                       </td>
                     </tr>
@@ -213,7 +285,11 @@ function AdminApp() {
                       <td>{d.email || d.id}</td>
                       <td>{d.total_deliveries || 0}</td>
                       <td>{Number(d.rating || 0).toFixed(1)}</td>
-                      <td><span className={`badge ${d.is_available ? 'active' : 'rejected'}`}>{d.is_available ? 'active' : 'inactive'}</span></td>
+                      <td>
+                        <span className={`badge ${d.is_available ? 'active' : 'rejected'}`}>
+                          {d.is_available ? 'active' : 'inactive'}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -257,7 +333,9 @@ function AdminApp() {
                   {filteredOrders.map((o) => (
                     <tr key={o.id}>
                       <td>{o.order_number || o.id}</td>
-                      <td><span className="badge pending">{o.status}</span></td>
+                      <td>
+                        <span className="badge pending">{o.status}</span>
+                      </td>
                       <td>{currency(o.total_cents || 0)}</td>
                       <td>{o.created_at ? new Date(o.created_at).toLocaleString() : '-'}</td>
                     </tr>

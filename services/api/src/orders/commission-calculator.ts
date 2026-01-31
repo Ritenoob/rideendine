@@ -20,14 +20,9 @@ export class CommissionCalculator {
   /**
    * Calculate commission breakdown for an order
    */
-  static calculate(
-    subtotalCents: number,
-    deliveryFeeCents?: number,
-  ): CommissionBreakdown {
+  static calculate(subtotalCents: number, deliveryFeeCents?: number): CommissionBreakdown {
     // Calculate platform fee (15% of subtotal)
-    const platformFeeCents = Math.round(
-      subtotalCents * this.PLATFORM_FEE_PERCENTAGE
-    );
+    const platformFeeCents = Math.round(subtotalCents * this.PLATFORM_FEE_PERCENTAGE);
 
     // Calculate chef earnings (subtotal minus platform fee)
     const chefEarningsCents = subtotalCents - platformFeeCents;
@@ -36,8 +31,7 @@ export class CommissionCalculator {
     const taxCents = Math.round(subtotalCents * this.TAX_PERCENTAGE);
 
     // Use provided delivery fee or default
-    const finalDeliveryFeeCents = 
-      deliveryFeeCents ?? this.DEFAULT_DELIVERY_FEE_CENTS;
+    const finalDeliveryFeeCents = deliveryFeeCents ?? this.DEFAULT_DELIVERY_FEE_CENTS;
 
     // Calculate total (subtotal + tax + delivery)
     const totalCents = subtotalCents + taxCents + finalDeliveryFeeCents;
@@ -55,11 +49,9 @@ export class CommissionCalculator {
   /**
    * Calculate chef ledger entry
    */
-  static calculateChefLedgerEntry(
-    subtotalCents: number,
-  ): LedgerEntry {
+  static calculateChefLedgerEntry(subtotalCents: number): LedgerEntry {
     const breakdown = this.calculate(subtotalCents);
-    
+
     return {
       type: 'order_earning',
       amountCents: breakdown.chefEarningsCents,
@@ -69,9 +61,7 @@ export class CommissionCalculator {
   /**
    * Calculate driver ledger entry
    */
-  static calculateDriverLedgerEntry(
-    deliveryFeeCents: number,
-  ): LedgerEntry {
+  static calculateDriverLedgerEntry(deliveryFeeCents: number): LedgerEntry {
     return {
       type: 'delivery_earning',
       amountCents: deliveryFeeCents,
@@ -81,12 +71,9 @@ export class CommissionCalculator {
   /**
    * Calculate platform ledger entry
    */
-  static calculatePlatformLedgerEntry(
-    subtotalCents: number,
-    taxCents: number,
-  ): LedgerEntry {
+  static calculatePlatformLedgerEntry(subtotalCents: number, taxCents: number): LedgerEntry {
     const breakdown = this.calculate(subtotalCents);
-    
+
     return {
       type: 'platform_fee',
       amountCents: breakdown.platformFeeCents + taxCents,
@@ -115,12 +102,8 @@ export class CommissionCalculator {
     const breakdown = this.calculate(estimatedSubtotal);
 
     // Apply refund percentage to each component
-    const chefRefundCents = Math.round(
-      breakdown.chefEarningsCents * refundPercentage
-    );
-    const platformRefundCents = Math.round(
-      breakdown.platformFeeCents * refundPercentage
-    );
+    const chefRefundCents = Math.round(breakdown.chefEarningsCents * refundPercentage);
+    const platformRefundCents = Math.round(breakdown.platformFeeCents * refundPercentage);
 
     return {
       refundAmountCents: actualRefundCents,

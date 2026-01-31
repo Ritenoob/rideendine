@@ -31,10 +31,7 @@ export class OrdersController {
   @Post()
   @Roles(UserRole.CUSTOMER)
   @UseGuards(RolesGuard)
-  async createOrder(
-    @CurrentUser() user: JwtPayload,
-    @Body() createDto: CreateOrderDto,
-  ) {
+  async createOrder(@CurrentUser() user: JwtPayload, @Body() createDto: CreateOrderDto) {
     return this.ordersService.createOrder(user.sub, createDto);
   }
 
@@ -59,10 +56,7 @@ export class OrdersController {
   @Post(':id/create-payment-intent')
   @Roles(UserRole.CUSTOMER)
   @UseGuards(RolesGuard)
-  async createPaymentIntent(
-    @CurrentUser() user: JwtPayload,
-    @Param('id') id: string,
-  ) {
+  async createPaymentIntent(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     return this.ordersService.createPaymentIntent(id, user.sub);
   }
 
@@ -97,11 +91,7 @@ export class OrdersController {
     @Param('id') id: string,
     @Body() cancelDto: CancelOrderDto,
   ) {
-    return this.ordersService.cancelOrder(
-      id,
-      user.sub,
-      cancelDto.cancellationReason,
-    );
+    return this.ordersService.cancelOrder(id, user.sub, cancelDto.cancellationReason);
   }
 
   @Post(':id/refund')

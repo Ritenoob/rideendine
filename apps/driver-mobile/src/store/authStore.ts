@@ -27,7 +27,12 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
 
-  setAuth: (user: User, driver: Driver | null, accessToken: string, refreshToken: string) => Promise<void>;
+  setAuth: (
+    user: User,
+    driver: Driver | null,
+    accessToken: string,
+    refreshToken: string,
+  ) => Promise<void>;
   setDriver: (driver: Driver) => void;
   clearAuth: () => Promise<void>;
   loadStoredAuth: () => Promise<void>;

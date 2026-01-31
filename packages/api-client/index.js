@@ -5,12 +5,12 @@ module.exports = {
       baseUrl,
       async loginCustomer(orderId) {
         const res = await fetch(`${baseUrl}/api/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: "customer", orderId })
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'customer', orderId }),
         });
         return res.json();
       },
     };
-  }
+  },
 };

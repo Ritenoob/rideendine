@@ -26,11 +26,26 @@ describe('Auth Endpoints (e2e)', () => {
 
   beforeEach(async () => {
     // Clean up test data
-    await db.query('DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)', ['test-%@example.com']);
-    await db.query('DELETE FROM user_profiles WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)', ['test-%@example.com']);
-    await db.query('DELETE FROM customers WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)', ['test-%@example.com']);
-    await db.query('DELETE FROM chefs WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)', ['test-%@example.com']);
-    await db.query('DELETE FROM drivers WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)', ['test-%@example.com']);
+    await db.query(
+      'DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)',
+      ['test-%@example.com'],
+    );
+    await db.query(
+      'DELETE FROM user_profiles WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)',
+      ['test-%@example.com'],
+    );
+    await db.query(
+      'DELETE FROM customers WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)',
+      ['test-%@example.com'],
+    );
+    await db.query(
+      'DELETE FROM chefs WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)',
+      ['test-%@example.com'],
+    );
+    await db.query(
+      'DELETE FROM drivers WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)',
+      ['test-%@example.com'],
+    );
     await db.query('DELETE FROM users WHERE email LIKE $1', ['test-%@example.com']);
   });
 
@@ -101,10 +116,7 @@ describe('Auth Endpoints (e2e)', () => {
       };
 
       // First registration
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send(userData)
-        .expect(201);
+      await request(app.getHttpServer()).post('/auth/register').send(userData).expect(201);
 
       // Second registration with same email
       return request(app.getHttpServer())
@@ -164,15 +176,13 @@ describe('Auth Endpoints (e2e)', () => {
     let registeredUser: any;
 
     beforeEach(async () => {
-      const res = await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'test-login@example.com',
-          password: 'Test1234!',
-          role: 'customer',
-          firstName: 'Test',
-          lastName: 'User',
-        });
+      const res = await request(app.getHttpServer()).post('/auth/register').send({
+        email: 'test-login@example.com',
+        password: 'Test1234!',
+        role: 'customer',
+        firstName: 'Test',
+        lastName: 'User',
+      });
       registeredUser = res.body.user;
     });
 
@@ -247,20 +257,16 @@ describe('Auth Endpoints (e2e)', () => {
 
     beforeEach(async () => {
       // Register and login to get refresh token
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'test-refresh@example.com',
-          password: 'Test1234!',
-          role: 'customer',
-        });
+      await request(app.getHttpServer()).post('/auth/register').send({
+        email: 'test-refresh@example.com',
+        password: 'Test1234!',
+        role: 'customer',
+      });
 
-      const loginRes = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({
-          email: 'test-refresh@example.com',
-          password: 'Test1234!',
-        });
+      const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'test-refresh@example.com',
+        password: 'Test1234!',
+      });
 
       refreshToken = loginRes.body.refreshToken;
     });
@@ -286,10 +292,7 @@ describe('Auth Endpoints (e2e)', () => {
     });
 
     it('should fail with missing refresh token', () => {
-      return request(app.getHttpServer())
-        .post('/auth/refresh')
-        .send({})
-        .expect(400);
+      return request(app.getHttpServer()).post('/auth/refresh').send({}).expect(400);
     });
   });
 
@@ -298,16 +301,16 @@ describe('Auth Endpoints (e2e)', () => {
 
     beforeEach(async () => {
       // Register a user
-      const registerRes = await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'test-verify@example.com',
-          password: 'Test1234!',
-          role: 'customer',
-        });
+      const registerRes = await request(app.getHttpServer()).post('/auth/register').send({
+        email: 'test-verify@example.com',
+        password: 'Test1234!',
+        role: 'customer',
+      });
 
       // Get verification token from database
-      const userRes = await db.query('SELECT verification_token FROM users WHERE email = $1', ['test-verify@example.com']);
+      const userRes = await db.query('SELECT verification_token FROM users WHERE email = $1', [
+        'test-verify@example.com',
+      ]);
       verificationToken = userRes.rows[0].verification_token;
     });
 
@@ -330,22 +333,17 @@ describe('Auth Endpoints (e2e)', () => {
     });
 
     it('should fail with missing token', () => {
-      return request(app.getHttpServer())
-        .post('/auth/verify-email')
-        .send({})
-        .expect(400);
+      return request(app.getHttpServer()).post('/auth/verify-email').send({}).expect(400);
     });
   });
 
   describe('POST /auth/forgot-password', () => {
     beforeEach(async () => {
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'test-forgot@example.com',
-          password: 'Test1234!',
-          role: 'customer',
-        });
+      await request(app.getHttpServer()).post('/auth/register').send({
+        email: 'test-forgot@example.com',
+        password: 'Test1234!',
+        role: 'customer',
+      });
     });
 
     it('should send password reset email', () => {
@@ -367,10 +365,7 @@ describe('Auth Endpoints (e2e)', () => {
     });
 
     it('should fail with missing email', () => {
-      return request(app.getHttpServer())
-        .post('/auth/forgot-password')
-        .send({})
-        .expect(400);
+      return request(app.getHttpServer()).post('/auth/forgot-password').send({}).expect(400);
     });
   });
 
@@ -379,13 +374,11 @@ describe('Auth Endpoints (e2e)', () => {
 
     beforeEach(async () => {
       // Register a user
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'test-reset@example.com',
-          password: 'Test1234!',
-          role: 'customer',
-        });
+      await request(app.getHttpServer()).post('/auth/register').send({
+        email: 'test-reset@example.com',
+        password: 'Test1234!',
+        role: 'customer',
+      });
 
       // Request password reset
       await request(app.getHttpServer())
@@ -393,7 +386,9 @@ describe('Auth Endpoints (e2e)', () => {
         .send({ email: 'test-reset@example.com' });
 
       // Get reset token from database
-      const userRes = await db.query('SELECT reset_token FROM users WHERE email = $1', ['test-reset@example.com']);
+      const userRes = await db.query('SELECT reset_token FROM users WHERE email = $1', [
+        'test-reset@example.com',
+      ]);
       resetToken = userRes.rows[0].reset_token;
     });
 
@@ -452,20 +447,16 @@ describe('Auth Endpoints (e2e)', () => {
 
     beforeEach(async () => {
       // Register and login
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'test-logout@example.com',
-          password: 'Test1234!',
-          role: 'customer',
-        });
+      await request(app.getHttpServer()).post('/auth/register').send({
+        email: 'test-logout@example.com',
+        password: 'Test1234!',
+        role: 'customer',
+      });
 
-      const loginRes = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({
-          email: 'test-logout@example.com',
-          password: 'Test1234!',
-        });
+      const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'test-logout@example.com',
+        password: 'Test1234!',
+      });
 
       accessToken = loginRes.body.accessToken;
       refreshToken = loginRes.body.refreshToken;
@@ -484,10 +475,7 @@ describe('Auth Endpoints (e2e)', () => {
     });
 
     it('should fail without authentication', () => {
-      return request(app.getHttpServer())
-        .post('/auth/logout')
-        .send({ refreshToken })
-        .expect(401);
+      return request(app.getHttpServer()).post('/auth/logout').send({ refreshToken }).expect(401);
     });
   });
 });

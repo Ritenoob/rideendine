@@ -33,7 +33,10 @@ export class ReviewsService {
    * - No duplicate review for same order/reviewee type
    * - Rating is 1-5
    */
-  async createReview(reviewerId: string, dto: CreateReviewDto): Promise<{ review: ReviewResponse }> {
+  async createReview(
+    reviewerId: string,
+    dto: CreateReviewDto,
+  ): Promise<{ review: ReviewResponse }> {
     // 1. Validate the order exists and belongs to the reviewer
     const orderResult = await this.db.query(
       `SELECT o.id, o.customer_id, o.chef_id, o.assigned_driver_id, o.status,
@@ -121,7 +124,10 @@ export class ReviewsService {
   /**
    * Get a single review by ID with reviewer info
    */
-  async getReviewById(reviewId: string, includeHidden = false): Promise<{ review: ReviewResponse }> {
+  async getReviewById(
+    reviewId: string,
+    includeHidden = false,
+  ): Promise<{ review: ReviewResponse }> {
     let sql = `
       SELECT r.*,
              up.first_name as reviewer_first_name,
@@ -172,10 +178,7 @@ export class ReviewsService {
    * List reviews with filters and pagination
    * Supports filtering by revieweeId, revieweeType, flagged status, and minRating
    */
-  async listReviews(
-    query: ReviewQueryDto,
-    includeHidden = false,
-  ): Promise<ReviewListResponse> {
+  async listReviews(query: ReviewQueryDto, includeHidden = false): Promise<ReviewListResponse> {
     const page = parseInt(query.page || '1');
     const perPage = Math.min(parseInt(query.perPage || '20'), 100);
     const offset = (page - 1) * perPage;
@@ -373,10 +376,7 @@ export class ReviewsService {
     dto: UpdateReviewDto,
   ): Promise<{ review: ReviewResponse }> {
     // Get the review and verify ownership
-    const existingResult = await this.db.query(
-      'SELECT * FROM reviews WHERE id = $1',
-      [reviewId],
-    );
+    const existingResult = await this.db.query('SELECT * FROM reviews WHERE id = $1', [reviewId]);
 
     if (existingResult.rows.length === 0) {
       throw new NotFoundException('Review not found');
@@ -441,10 +441,7 @@ export class ReviewsService {
     dto: ModerateReviewDto,
   ): Promise<{ review: ReviewResponse; message: string }> {
     // Verify review exists
-    const existingResult = await this.db.query(
-      'SELECT * FROM reviews WHERE id = $1',
-      [reviewId],
-    );
+    const existingResult = await this.db.query('SELECT * FROM reviews WHERE id = $1', [reviewId]);
 
     if (existingResult.rows.length === 0) {
       throw new NotFoundException('Review not found');
@@ -500,11 +497,7 @@ export class ReviewsService {
         if (!existing.is_hidden) {
           throw new BadRequestException('Review is not hidden');
         }
-        updateFields = [
-          'is_hidden = false',
-          'moderated_at = NOW()',
-          'moderated_by = $3',
-        ];
+        updateFields = ['is_hidden = false', 'moderated_at = NOW()', 'moderated_by = $3'];
         message = 'Review has been restored to public view';
         break;
 
@@ -542,10 +535,7 @@ export class ReviewsService {
    * Delete a review (admin only)
    */
   async deleteReview(reviewId: string, adminId: string): Promise<{ message: string }> {
-    const existingResult = await this.db.query(
-      'SELECT * FROM reviews WHERE id = $1',
-      [reviewId],
-    );
+    const existingResult = await this.db.query('SELECT * FROM reviews WHERE id = $1', [reviewId]);
 
     if (existingResult.rows.length === 0) {
       throw new NotFoundException('Review not found');
@@ -633,15 +623,17 @@ export class ReviewsService {
       }
     }
     if (revieweeType === 'chef') {
-      await this.db.query(
-        'UPDATE chefs SET rating = $1, review_count = $2 WHERE user_id = $3',
-        [rating, reviewCount, revieweeId],
-      );
+      await this.db.query('UPDATE chefs SET rating = $1, review_count = $2 WHERE user_id = $3', [
+        rating,
+        reviewCount,
+        revieweeId,
+      ]);
     } else {
-      await this.db.query(
-        'UPDATE drivers SET rating = $1, review_count = $2 WHERE user_id = $3',
-        [rating, reviewCount, revieweeId],
-      );
+      await this.db.query('UPDATE drivers SET rating = $1, review_count = $2 WHERE user_id = $3', [
+        rating,
+        reviewCount,
+        revieweeId,
+      ]);
     }
 
     this.logger.debug(

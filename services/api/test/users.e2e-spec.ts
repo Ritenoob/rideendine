@@ -22,22 +22,18 @@ describe('Users Endpoints (e2e)', () => {
     db = app.get<Pool>('DATABASE_POOL');
 
     // Register and login a test user
-    await request(app.getHttpServer())
-      .post('/auth/register')
-      .send({
-        email: 'test-users@example.com',
-        password: 'Test1234!',
-        role: 'customer',
-        firstName: 'Test',
-        lastName: 'User',
-      });
+    await request(app.getHttpServer()).post('/auth/register').send({
+      email: 'test-users@example.com',
+      password: 'Test1234!',
+      role: 'customer',
+      firstName: 'Test',
+      lastName: 'User',
+    });
 
-    const loginRes = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({
-        email: 'test-users@example.com',
-        password: 'Test1234!',
-      });
+    const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
+      email: 'test-users@example.com',
+      password: 'Test1234!',
+    });
 
     accessToken = loginRes.body.accessToken;
     userId = loginRes.body.user.id;
@@ -45,9 +41,18 @@ describe('Users Endpoints (e2e)', () => {
 
   afterAll(async () => {
     // Clean up test data
-    await db.query('DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)', ['test-users-%@example.com']);
-    await db.query('DELETE FROM user_profiles WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)', ['test-users-%@example.com']);
-    await db.query('DELETE FROM customers WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)', ['test-users-%@example.com']);
+    await db.query(
+      'DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)',
+      ['test-users-%@example.com'],
+    );
+    await db.query(
+      'DELETE FROM user_profiles WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)',
+      ['test-users-%@example.com'],
+    );
+    await db.query(
+      'DELETE FROM customers WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)',
+      ['test-users-%@example.com'],
+    );
     await db.query('DELETE FROM users WHERE email LIKE $1', ['test-users-%@example.com']);
     await app.close();
   });
@@ -73,9 +78,7 @@ describe('Users Endpoints (e2e)', () => {
     });
 
     it('should fail without authentication', () => {
-      return request(app.getHttpServer())
-        .get('/users/me')
-        .expect(401);
+      return request(app.getHttpServer()).get('/users/me').expect(401);
     });
 
     it('should fail with invalid token', () => {
@@ -206,20 +209,16 @@ describe('Users Endpoints (e2e)', () => {
 
     beforeEach(async () => {
       // Create a user for deletion tests
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'test-delete@example.com',
-          password: 'Test1234!',
-          role: 'customer',
-        });
+      await request(app.getHttpServer()).post('/auth/register').send({
+        email: 'test-delete@example.com',
+        password: 'Test1234!',
+        role: 'customer',
+      });
 
-      const loginRes = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({
-          email: 'test-delete@example.com',
-          password: 'Test1234!',
-        });
+      const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'test-delete@example.com',
+        password: 'Test1234!',
+      });
 
       deleteAccessToken = loginRes.body.accessToken;
       deleteUserId = loginRes.body.user.id;
@@ -237,9 +236,7 @@ describe('Users Endpoints (e2e)', () => {
     });
 
     it('should fail without authentication', () => {
-      return request(app.getHttpServer())
-        .delete('/users/me')
-        .expect(401);
+      return request(app.getHttpServer()).delete('/users/me').expect(401);
     });
 
     it('should fail with invalid token', () => {
@@ -255,20 +252,16 @@ describe('Users Endpoints (e2e)', () => {
 
     beforeEach(async () => {
       // Register a user without profile data
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'test-no-profile@example.com',
-          password: 'Test1234!',
-          role: 'customer',
-        });
+      await request(app.getHttpServer()).post('/auth/register').send({
+        email: 'test-no-profile@example.com',
+        password: 'Test1234!',
+        role: 'customer',
+      });
 
-      const loginRes = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({
-          email: 'test-no-profile@example.com',
-          password: 'Test1234!',
-        });
+      const loginRes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'test-no-profile@example.com',
+        password: 'Test1234!',
+      });
 
       newAccessToken = loginRes.body.accessToken;
     });

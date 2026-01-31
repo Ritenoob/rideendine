@@ -17,10 +17,7 @@ export class DriversService {
   constructor(@Inject('DATABASE_POOL') private readonly db: Pool) {}
 
   async registerDriver(dto: RegisterDriverDto): Promise<DriverProfileResponseDto> {
-    const existingUser = await this.db.query(
-      'SELECT id FROM users WHERE email = $1',
-      [dto.email],
-    );
+    const existingUser = await this.db.query('SELECT id FROM users WHERE email = $1', [dto.email]);
 
     if (existingUser.rows.length > 0) {
       throw new ConflictException('Email already registered');
@@ -113,7 +110,10 @@ export class DriversService {
     };
   }
 
-  async updateDriverProfile(userId: string, dto: UpdateDriverProfileDto): Promise<DriverProfileResponseDto> {
+  async updateDriverProfile(
+    userId: string,
+    dto: UpdateDriverProfileDto,
+  ): Promise<DriverProfileResponseDto> {
     const updates: string[] = [];
     const values: any[] = [];
     let paramCount = 1;
@@ -162,7 +162,10 @@ export class DriversService {
     return this.getDriverProfile(userId);
   }
 
-  async updateAvailability(userId: string, dto: UpdateAvailabilityDto): Promise<{ isAvailable: boolean }> {
+  async updateAvailability(
+    userId: string,
+    dto: UpdateAvailabilityDto,
+  ): Promise<{ isAvailable: boolean }> {
     const result = await this.db.query(
       `UPDATE drivers
        SET is_available = $1, updated_at = NOW()
@@ -233,11 +236,11 @@ export class DriversService {
     };
   }
 
-  async getLocationHistory(userId: string, limit: number = 50): Promise<DriverLocationHistoryDto[]> {
-    const driverResult = await this.db.query(
-      'SELECT id FROM drivers WHERE user_id = $1',
-      [userId],
-    );
+  async getLocationHistory(
+    userId: string,
+    limit: number = 50,
+  ): Promise<DriverLocationHistoryDto[]> {
+    const driverResult = await this.db.query('SELECT id FROM drivers WHERE user_id = $1', [userId]);
 
     if (driverResult.rows.length === 0) {
       throw new NotFoundException('Driver not found');
@@ -254,7 +257,7 @@ export class DriversService {
       [driverId, limit],
     );
 
-    return result.rows.map(row => ({
+    return result.rows.map((row) => ({
       latitude: parseFloat(row.latitude),
       longitude: parseFloat(row.longitude),
       accuracy: row.accuracy ? parseFloat(row.accuracy) : undefined,
@@ -264,7 +267,9 @@ export class DriversService {
     }));
   }
 
-  private async getDriverEarnings(driverId: string): Promise<{ totalEarnings: number; pendingPayouts: number }> {
+  private async getDriverEarnings(
+    driverId: string,
+  ): Promise<{ totalEarnings: number; pendingPayouts: number }> {
     const result = await this.db.query(
       `SELECT 
         COALESCE(SUM(total_earning_cents), 0) as total_earnings,

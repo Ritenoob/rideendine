@@ -97,7 +97,7 @@ class ApiClient {
 
   async getStripeStatus(chefId: string) {
     return this.request<{ complete: boolean; payoutsEnabled: boolean }>(
-      `/chefs/${chefId}/stripe/status`
+      `/chefs/${chefId}/stripe/status`,
     );
   }
 

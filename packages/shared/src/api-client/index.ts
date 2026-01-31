@@ -44,10 +44,7 @@ export class ApiClient {
     this.onError = config.onError;
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}/api/${API_VERSION}${endpoint}`;
     const token = this.getAccessToken();
 
@@ -227,7 +224,7 @@ export class ApiClient {
 
   async getStripeStatus(chefId: string): Promise<{ complete: boolean; payoutsEnabled: boolean }> {
     return this.request<{ complete: boolean; payoutsEnabled: boolean }>(
-      `/chefs/${chefId}/stripe/status`
+      `/chefs/${chefId}/stripe/status`,
     );
   }
 
@@ -254,9 +251,7 @@ export class ApiClient {
     if (params?.page) query.set('page', params.page.toString());
     if (params?.limit) query.set('limit', params.limit.toString());
     const queryString = query.toString();
-    return this.request<PaginatedResponse<Order>>(
-      `/orders${queryString ? `?${queryString}` : ''}`
-    );
+    return this.request<PaginatedResponse<Order>>(`/orders${queryString ? `?${queryString}` : ''}`);
   }
 
   async createPaymentIntent(orderId: string): Promise<PaymentIntentResponse> {
@@ -300,9 +295,7 @@ export class ApiClient {
   }
 
   async getOrderEta(orderId: string): Promise<{ etaSeconds: number; etaMinutes: number }> {
-    return this.request<{ etaSeconds: number; etaMinutes: number }>(
-      `/orders/${orderId}/eta`
-    );
+    return this.request<{ etaSeconds: number; etaMinutes: number }>(`/orders/${orderId}/eta`);
   }
 
   // ============ Driver Endpoints ============
@@ -355,7 +348,7 @@ export class ApiClient {
   }> {
     const query = period ? `?period=${period}` : '';
     return this.request<{ total: number; deliveries: number; tips: number }>(
-      `/drivers/me/earnings${query}`
+      `/drivers/me/earnings${query}`,
     );
   }
 
@@ -381,7 +374,7 @@ export class ApiClient {
   async verifyChef(
     chefId: string,
     decision: 'approved' | 'rejected',
-    notes?: string
+    notes?: string,
   ): Promise<Chef> {
     return this.request<Chef>(`/admin/chefs/${chefId}/verify`, {
       method: 'PATCH',

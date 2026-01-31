@@ -21,11 +21,11 @@ export class GeocodingService {
 
   constructor(private configService: ConfigService) {
     this.apiKey = this.configService.get<string>('GOOGLE_MAPS_API_KEY');
-    
+
     if (!this.apiKey) {
       this.logger.warn('GOOGLE_MAPS_API_KEY not configured. Geocoding will fail.');
     }
-    
+
     this.googleMapsClient = new Client({});
   }
 
@@ -41,7 +41,7 @@ export class GeocodingService {
 
     try {
       this.logger.debug(`Geocoding address: ${address}`);
-      
+
       const response = await this.googleMapsClient.geocode({
         params: {
           address,
@@ -85,7 +85,7 @@ export class GeocodingService {
 
     try {
       this.logger.debug(`Reverse geocoding: ${lat}, ${lng}`);
-      
+
       const response = await this.googleMapsClient.reverseGeocode({
         params: {
           latlng: { lat, lng },
@@ -117,12 +117,7 @@ export class GeocodingService {
    * @param lng2 End longitude
    * @returns Distance in km and miles
    */
-  calculateDistance(
-    lat1: number,
-    lng1: number,
-    lat2: number,
-    lng2: number,
-  ): DistanceResult {
+  calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): DistanceResult {
     const R = 6371; // Earth's radius in kilometers
     const dLat = this.toRadians(lat2 - lat1);
     const dLng = this.toRadians(lng2 - lng1);
@@ -159,12 +154,7 @@ export class GeocodingService {
     deliveryLng: number,
     radiusMiles: number,
   ): { valid: boolean; distance: DistanceResult } {
-    const distance = this.calculateDistance(
-      chefLat,
-      chefLng,
-      deliveryLat,
-      deliveryLng,
-    );
+    const distance = this.calculateDistance(chefLat, chefLng, deliveryLat, deliveryLng);
 
     return {
       valid: distance.distanceMiles <= radiusMiles,

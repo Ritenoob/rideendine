@@ -145,7 +145,7 @@ export function canCancelOrder(status: OrderStatus | string): boolean {
  * Get order progress percentage
  */
 export function getOrderProgress(status: OrderStatus | string): number {
-  const index = ORDER_STATUS_SEQUENCE.indexOf(status as typeof ORDER_STATUS_SEQUENCE[number]);
+  const index = ORDER_STATUS_SEQUENCE.indexOf(status as (typeof ORDER_STATUS_SEQUENCE)[number]);
   if (index === -1) return 0;
   return Math.round((index / (ORDER_STATUS_SEQUENCE.length - 1)) * 100);
 }
@@ -173,12 +173,7 @@ export function isOrderActive(status: OrderStatus | string): boolean {
 /**
  * Calculate distance between two coordinates using Haversine formula
  */
-export function calculateDistance(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number
-): number {
+export function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3959; // Earth's radius in miles
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
@@ -254,7 +249,7 @@ export function calculateCartTotals(
   deliveryFee: number,
   serviceFeeRate: number,
   taxRate: number,
-  tip: number
+  tip: number,
 ): {
   subtotal: number;
   deliveryFee: number;
@@ -311,7 +306,7 @@ export function capitalize(str: string): string {
  */
 export function debounce<T extends (...args: unknown[]) => unknown>(
   fn: T,
-  delay: number
+  delay: number,
 ): (...args: Parameters<T>) => void {
   let timeoutId: ReturnType<typeof setTimeout>;
   return (...args: Parameters<T>) => {
@@ -330,11 +325,7 @@ export function sleep(ms: number): Promise<void> {
 /**
  * Retry async function with exponential backoff
  */
-export async function retry<T>(
-  fn: () => Promise<T>,
-  maxRetries = 3,
-  baseDelay = 1000
-): Promise<T> {
+export async function retry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 1000): Promise<T> {
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {

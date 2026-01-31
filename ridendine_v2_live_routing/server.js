@@ -1,9 +1,9 @@
-const http = require("http");
-const https = require("https");
-const crypto = require("crypto");
-const { URL } = require("url");
-const fs = require("fs");
-const path = require("path");
+const http = require('http');
+const https = require('https');
+const crypto = require('crypto');
+const { URL } = require('url');
+const fs = require('fs');
+const path = require('path');
 
 const PORT = 8081;
 const EASTGATE = { lat: 43.2207, lng: -79.7651 };
@@ -17,9 +17,9 @@ const DENSITY_RADIUS_KM = 2;
 const BASE_FEE_CENTS = 199;
 const PER_KM_FEE_CENTS = 120;
 const SURGE_MULTIPLIER = 1.3;
-const DEFAULT_OSRM = "https://router.project-osrm.org";
-const DEFAULT_PROVIDER = process.env.ROUTING_PROVIDER_DEFAULT || "osrm";
-const ROUTING_SERVER_NAME = process.env.ROUTING_SERVER_NAME || "RideNDine Demo Routing";
+const DEFAULT_OSRM = 'https://router.project-osrm.org';
+const DEFAULT_PROVIDER = process.env.ROUTING_PROVIDER_DEFAULT || 'osrm';
+const ROUTING_SERVER_NAME = process.env.ROUTING_SERVER_NAME || 'RideNDine Demo Routing';
 const START_TIME = Date.now();
 const LAND_BOUNDS = {
   minLat: 43.08,
@@ -31,7 +31,7 @@ const DEMO_TOKENS = new Map();
 const DRIVER_LAST_UPDATE = new Map();
 
 // Auth service integration
-const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || "http://localhost:9001";
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:9001';
 
 function proxyToAuthService(method, authPath, body) {
   return new Promise((resolve, reject) => {
@@ -42,14 +42,14 @@ function proxyToAuthService(method, authPath, body) {
       path: url.pathname,
       method: method,
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
     };
 
     const req = http.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => {
+      let data = '';
+      res.on('data', (chunk) => (data += chunk));
+      res.on('end', () => {
         try {
           resolve({ statusCode: res.statusCode, data: JSON.parse(data) });
         } catch (e) {
@@ -58,19 +58,19 @@ function proxyToAuthService(method, authPath, body) {
       });
     });
 
-    req.on("error", (e) => reject(e));
+    req.on('error', (e) => reject(e));
     if (body) req.write(JSON.stringify(body));
     req.end();
   });
 }
 
 function handleV2Auth(req, res, authPath) {
-  let body = "";
-  req.on("data", (chunk) => (body += chunk));
-  req.on("end", async () => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.setHeader("Content-Type", "application/json");
+  let body = '';
+  req.on('data', (chunk) => (body += chunk));
+  req.on('end', async () => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Content-Type', 'application/json');
 
     try {
       const payload = body ? JSON.parse(body) : {};
@@ -79,7 +79,7 @@ function handleV2Auth(req, res, authPath) {
       res.end(JSON.stringify(result.data));
     } catch (err) {
       res.statusCode = 502;
-      res.end(JSON.stringify({ error: "Auth service unavailable", details: err.message }));
+      res.end(JSON.stringify({ error: 'Auth service unavailable', details: err.message }));
     }
   });
 }
@@ -87,14 +87,14 @@ const DRIVER_STALE_MS = 15000;
 const DRIVER_METRICS = new Map();
 const DRIVER_SCORES = new Map();
 const ALERTS = [];
-const STATE_FILE = path.join(__dirname, "demo_state.json");
+const STATE_FILE = path.join(__dirname, 'demo_state.json');
 const STATUS_FLOW = [
-  { name: "accepted", seconds: 120 },
-  { name: "preparing", seconds: 300 },
-  { name: "ready", seconds: 120 },
-  { name: "picked_up", seconds: 60 },
-  { name: "delivering", seconds: 600 },
-  { name: "delivered", seconds: 3600 },
+  { name: 'accepted', seconds: 120 },
+  { name: 'preparing', seconds: 300 },
+  { name: 'ready', seconds: 120 },
+  { name: 'picked_up', seconds: 60 },
+  { name: 'delivering', seconds: 600 },
+  { name: 'delivered', seconds: 3600 },
 ];
 
 function randomCoord(center, radiusKm) {
@@ -129,7 +129,7 @@ function clampToLand(coord) {
 }
 
 function makeId() {
-  return crypto.randomBytes(4).toString("hex");
+  return crypto.randomBytes(4).toString('hex');
 }
 
 const cooks = [];
@@ -161,7 +161,7 @@ for (let i = 0; i < NUM_DRIVERS; i += 1) {
 
 for (let i = 0; i < orders.length; i += 1) {
   orders[i].driverId = drivers[i % drivers.length].id;
-  orders[i].status = "accepted";
+  orders[i].status = 'accepted';
 }
 
 drivers.forEach((driver) => {
@@ -192,7 +192,7 @@ function makeInitPayload() {
   refreshDriverScores();
   const batches = buildBatches();
   return {
-    type: "init",
+    type: 'init',
     data: {
       cooks,
       customers,
@@ -208,7 +208,7 @@ function makeLocationPayload() {
   updateOrderStatuses();
   detectAlerts();
   return {
-    type: "locations",
+    type: 'locations',
     data: {
       drivers: drivers.map((d) => ({ id: d.id, lat: d.lat, lng: d.lng })),
       orders: orders.map((o) => ({ id: o.id, status: o.status })),
@@ -219,7 +219,7 @@ function makeLocationPayload() {
 
 function buildScopedPayload(role, orderId, driverId) {
   const base = makeLocationPayload();
-  if (role === "customer" && orderId) {
+  if (role === 'customer' && orderId) {
     const order = orders.find((o) => o.id === orderId);
     if (!order) return base;
     return {
@@ -231,7 +231,7 @@ function buildScopedPayload(role, orderId, driverId) {
     };
   }
 
-  if (role === "driver" && driverId) {
+  if (role === 'driver' && driverId) {
     return {
       ...base,
       data: {
@@ -257,7 +257,7 @@ function updateOrderStatuses() {
       }
       cursor -= step.seconds;
     }
-    order.status = "delivered";
+    order.status = 'delivered';
   });
 }
 
@@ -302,8 +302,8 @@ function buildBatches() {
 
 function buildStops(driver, cook, batchOrders) {
   const stops = [];
-  stops.push({ type: "driver", id: driver.id, lat: driver.lat, lng: driver.lng });
-  stops.push({ type: "cook", id: cook.id, lat: cook.lat, lng: cook.lng });
+  stops.push({ type: 'driver', id: driver.id, lat: driver.lat, lng: driver.lng });
+  stops.push({ type: 'cook', id: cook.id, lat: cook.lat, lng: cook.lng });
 
   const remaining = batchOrders.map((order) => {
     const customer = customers.find((c) => c.id === order.customerId);
@@ -324,7 +324,7 @@ function buildStops(driver, cook, batchOrders) {
     }
     const next = remaining.splice(bestIndex, 1)[0];
     stops.push({
-      type: "customer",
+      type: 'customer',
       id: next.customer.id,
       orderId: next.orderId,
       lat: next.customer.lat,
@@ -357,7 +357,7 @@ function scoreDriver(driver, cook) {
 
 function assignDrivers() {
   const assignments = [];
-  const openOrders = orders.filter((o) => o.status !== "delivered");
+  const openOrders = orders.filter((o) => o.status !== 'delivered');
   openOrders.forEach((order) => {
     const cook = cooks.find((c) => c.id === order.cookId);
     if (!cook) return;
@@ -389,18 +389,18 @@ function detectAlerts() {
   drivers.forEach((driver) => {
     const last = DRIVER_LAST_UPDATE.get(driver.id) || 0;
     if (Date.now() - last > DRIVER_STALE_MS * 2) {
-      ALERTS.push({ type: "gps_stale", driverId: driver.id, lastUpdate: last });
+      ALERTS.push({ type: 'gps_stale', driverId: driver.id, lastUpdate: last });
     }
   });
   orders.forEach((order) => {
-    if (order.status === "delivering") {
+    if (order.status === 'delivering') {
       const etaSeconds = estimateEtaSeconds(
         drivers.find((d) => d.id === order.driverId),
         cooks.find((c) => c.id === order.cookId),
-        customers.find((c) => c.id === order.customerId)
+        customers.find((c) => c.id === order.customerId),
       );
       if (etaSeconds > 1800) {
-        ALERTS.push({ type: "eta_high", orderId: order.id, etaSeconds });
+        ALERTS.push({ type: 'eta_high', orderId: order.id, etaSeconds });
       }
     }
   });
@@ -412,7 +412,7 @@ function saveState() {
     scores: Object.fromEntries(DRIVER_SCORES),
   };
   try {
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), "utf-8");
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
   } catch (err) {
     // ignore
   }
@@ -421,7 +421,7 @@ function saveState() {
 function loadState() {
   try {
     if (!fs.existsSync(STATE_FILE)) return;
-    const raw = fs.readFileSync(STATE_FILE, "utf-8");
+    const raw = fs.readFileSync(STATE_FILE, 'utf-8');
     const state = JSON.parse(raw);
     if (state.orders) {
       state.orders.forEach((saved) => {
@@ -457,7 +457,7 @@ function decodePolyline(encoded) {
       result |= (byte & 0x1f) << shift;
       shift += 5;
     } while (byte >= 0x20);
-    const deltaLat = (result & 1) ? ~(result >> 1) : result >> 1;
+    const deltaLat = result & 1 ? ~(result >> 1) : result >> 1;
     lat += deltaLat;
 
     result = 0;
@@ -467,7 +467,7 @@ function decodePolyline(encoded) {
       result |= (byte & 0x1f) << shift;
       shift += 5;
     } while (byte >= 0x20);
-    const deltaLng = (result & 1) ? ~(result >> 1) : result >> 1;
+    const deltaLng = result & 1 ? ~(result >> 1) : result >> 1;
     lng += deltaLng;
 
     coordinates.push([lat / 1e5, lng / 1e5]);
@@ -478,21 +478,21 @@ function decodePolyline(encoded) {
 
 function requestJson(urlString, options = {}) {
   const url = new URL(urlString);
-  const transport = url.protocol === "https:" ? https : http;
+  const transport = url.protocol === 'https:' ? https : http;
 
   return new Promise((resolve, reject) => {
     const req = transport.request(
       url,
       {
-        method: options.method || "GET",
+        method: options.method || 'GET',
         headers: options.headers || {},
       },
       (res) => {
-        let data = "";
-        res.on("data", (chunk) => {
+        let data = '';
+        res.on('data', (chunk) => {
           data += chunk;
         });
-        res.on("end", () => {
+        res.on('end', () => {
           if (res.statusCode && res.statusCode >= 400) {
             return reject(new Error(`HTTP ${res.statusCode}: ${data}`));
           }
@@ -502,10 +502,10 @@ function requestJson(urlString, options = {}) {
             reject(err);
           }
         });
-      }
+      },
     );
 
-    req.on("error", reject);
+    req.on('error', reject);
     if (options.body) {
       req.write(options.body);
     }
@@ -519,16 +519,16 @@ function normalizeCoords(coords) {
 
 async function routeWithMapbox(coords, profile) {
   const token = process.env.MAPBOX_TOKEN;
-  if (!token) throw new Error("MAPBOX_TOKEN not set");
-  const coordString = coords.map((c) => `${c.lng},${c.lat}`).join(";");
+  if (!token) throw new Error('MAPBOX_TOKEN not set');
+  const coordString = coords.map((c) => `${c.lng},${c.lat}`).join(';');
   const url =
     `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordString}` +
     `?geometries=geojson&overview=full&access_token=${token}`;
   const json = await requestJson(url);
   const route = json.routes && json.routes[0];
-  if (!route) throw new Error("Mapbox: no routes");
+  if (!route) throw new Error('Mapbox: no routes');
   return {
-    provider: "mapbox",
+    provider: 'mapbox',
     distanceMeters: route.distance,
     durationSeconds: route.duration,
     geometry: route.geometry.coordinates.map((c) => [c[1], c[0]]),
@@ -537,15 +537,13 @@ async function routeWithMapbox(coords, profile) {
 
 async function routeWithOsrm(coords, profile) {
   const base = process.env.OSRM_BASE_URL || DEFAULT_OSRM;
-  const coordString = coords.map((c) => `${c.lng},${c.lat}`).join(";");
-  const url =
-    `${base}/route/v1/${profile}/${coordString}` +
-    "?geometries=geojson&overview=full";
+  const coordString = coords.map((c) => `${c.lng},${c.lat}`).join(';');
+  const url = `${base}/route/v1/${profile}/${coordString}` + '?geometries=geojson&overview=full';
   const json = await requestJson(url);
   const route = json.routes && json.routes[0];
-  if (!route) throw new Error("OSRM: no routes");
+  if (!route) throw new Error('OSRM: no routes');
   return {
-    provider: "osrm",
+    provider: 'osrm',
     distanceMeters: route.distance,
     durationSeconds: route.duration,
     geometry: route.geometry.coordinates.map((c) => [c[1], c[0]]),
@@ -554,8 +552,8 @@ async function routeWithOsrm(coords, profile) {
 
 async function routeWithGoogle(coords) {
   const key = process.env.GOOGLE_MAPS_API_KEY;
-  if (!key) throw new Error("GOOGLE_MAPS_API_KEY not set");
-  if (coords.length < 2) throw new Error("Google: need at least 2 coordinates");
+  if (!key) throw new Error('GOOGLE_MAPS_API_KEY not set');
+  if (coords.length < 2) throw new Error('Google: need at least 2 coordinates');
 
   const origin = coords[0];
   const destination = coords[coords.length - 1];
@@ -565,69 +563,71 @@ async function routeWithGoogle(coords) {
 
   const body = JSON.stringify({
     origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
-    destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
+    destination: {
+      location: { latLng: { latitude: destination.lat, longitude: destination.lng } },
+    },
     intermediates,
-    travelMode: "DRIVE",
-    routingPreference: "TRAFFIC_AWARE",
-    polylineQuality: "HIGH_QUALITY",
+    travelMode: 'DRIVE',
+    routingPreference: 'TRAFFIC_AWARE',
+    polylineQuality: 'HIGH_QUALITY',
   });
 
-  const json = await requestJson("https://routes.googleapis.com/directions/v2:computeRoutes", {
-    method: "POST",
+  const json = await requestJson('https://routes.googleapis.com/directions/v2:computeRoutes', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": key,
-      "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline",
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': key,
+      'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline',
     },
     body,
   });
 
   const route = json.routes && json.routes[0];
-  if (!route || !route.polyline) throw new Error("Google: no routes");
+  if (!route || !route.polyline) throw new Error('Google: no routes');
 
   const decoded = decodePolyline(route.polyline.encodedPolyline);
   return {
-    provider: "google",
+    provider: 'google',
     distanceMeters: route.distanceMeters,
-    durationSeconds: route.duration ? parseInt(route.duration.replace("s", ""), 10) : null,
+    durationSeconds: route.duration ? parseInt(route.duration.replace('s', ''), 10) : null,
     geometry: decoded.map((c) => [c[0], c[1]]),
   };
 }
 
 async function handleRouteRequest(req, res) {
-  let body = "";
-  req.on("data", (chunk) => {
+  let body = '';
+  req.on('data', (chunk) => {
     body += chunk;
   });
-  req.on("end", async () => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    res.setHeader("Content-Type", "application/json");
+  req.on('end', async () => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Content-Type', 'application/json');
 
     let payload;
     try {
       payload = JSON.parse(body);
     } catch (err) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "Invalid JSON body" }));
+      res.end(JSON.stringify({ error: 'Invalid JSON body' }));
       return;
     }
 
     const provider = payload.provider || DEFAULT_PROVIDER;
-    const profile = payload.profile || "driving";
+    const profile = payload.profile || 'driving';
     const coords = normalizeCoords(payload.coordinates || []);
 
     if (coords.length < 2) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "At least 2 coordinates are required" }));
+      res.end(JSON.stringify({ error: 'At least 2 coordinates are required' }));
       return;
     }
 
     try {
       let route;
-      if (provider === "mapbox") {
+      if (provider === 'mapbox') {
         route = await routeWithMapbox(coords, profile);
-      } else if (provider === "google") {
+      } else if (provider === 'google') {
         route = await routeWithGoogle(coords);
       } else {
         route = await routeWithOsrm(coords, profile);
@@ -642,33 +642,33 @@ async function handleRouteRequest(req, res) {
 }
 
 function acceptWebSocket(req, socket, head) {
-  const key = req.headers["sec-websocket-key"];
+  const key = req.headers['sec-websocket-key'];
   if (!key) {
     socket.destroy();
     return;
   }
 
   const acceptKey = crypto
-    .createHash("sha1")
-    .update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
-    .digest("base64");
+    .createHash('sha1')
+    .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+    .digest('base64');
 
   socket.write(
     [
-      "HTTP/1.1 101 Switching Protocols",
-      "Upgrade: websocket",
-      "Connection: Upgrade",
+      'HTTP/1.1 101 Switching Protocols',
+      'Upgrade: websocket',
+      'Connection: Upgrade',
       `Sec-WebSocket-Accept: ${acceptKey}`,
-      "\r\n",
-    ].join("\r\n")
+      '\r\n',
+    ].join('\r\n'),
   );
 
-  const url = new URL(req.url, "http://localhost");
-  const token = url.searchParams.get("token");
+  const url = new URL(req.url, 'http://localhost');
+  const token = url.searchParams.get('token');
   const auth = token ? DEMO_TOKENS.get(token) : null;
-  const role = auth?.role || "dispatch";
-  const orderId = auth?.orderId || "";
-  const driverId = auth?.driverId || "";
+  const role = auth?.role || 'dispatch';
+  const orderId = auth?.orderId || '';
+  const driverId = auth?.driverId || '';
 
   socket.write(encodeFrame(JSON.stringify(makeInitPayload())));
 
@@ -678,8 +678,8 @@ function acceptWebSocket(req, socket, head) {
     socket.write(encodeFrame(JSON.stringify(scoped)));
   }, UPDATE_MS);
 
-  socket.on("close", () => clearInterval(interval));
-  socket.on("error", () => clearInterval(interval));
+  socket.on('close', () => clearInterval(interval));
+  socket.on('error', () => clearInterval(interval));
 }
 
 function encodeFrame(data) {
@@ -706,29 +706,29 @@ function encodeFrame(data) {
 }
 
 function handleLogin(req, res) {
-  let body = "";
-  req.on("data", (chunk) => {
+  let body = '';
+  req.on('data', (chunk) => {
     body += chunk;
   });
-  req.on("end", () => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    res.setHeader("Content-Type", "application/json");
+  req.on('end', () => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Content-Type', 'application/json');
 
     let payload;
     try {
       payload = JSON.parse(body);
     } catch (err) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "Invalid JSON body" }));
+      res.end(JSON.stringify({ error: 'Invalid JSON body' }));
       return;
     }
 
-    const role = payload.role || "dispatch";
-    const orderId = payload.orderId || "";
-    const driverId = payload.driverId || "";
+    const role = payload.role || 'dispatch';
+    const orderId = payload.orderId || '';
+    const driverId = payload.driverId || '';
 
-    const token = crypto.randomBytes(12).toString("hex");
+    const token = crypto.randomBytes(12).toString('hex');
     DEMO_TOKENS.set(token, { role, orderId, driverId, createdAt: Date.now() });
 
     res.statusCode = 200;
@@ -738,11 +738,11 @@ function handleLogin(req, res) {
 
 function handleMe(req, res) {
   const auth = getAuthFromRequest(req);
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Content-Type", "application/json");
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Type', 'application/json');
   if (!auth) {
     res.statusCode = 401;
-    res.end(JSON.stringify({ error: "Invalid token" }));
+    res.end(JSON.stringify({ error: 'Invalid token' }));
     return;
   }
   res.statusCode = 200;
@@ -752,10 +752,10 @@ function handleMe(req, res) {
 // Decode JWT payload (base64url)
 function decodeJwtPayload(token) {
   try {
-    const parts = token.split(".");
+    const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = Buffer.from(payload, "base64").toString("utf8");
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = Buffer.from(payload, 'base64').toString('utf8');
     return JSON.parse(decoded);
   } catch (e) {
     return null;
@@ -769,22 +769,22 @@ function isJwtExpired(payload) {
 }
 
 function getAuthFromRequest(req) {
-  const url = new URL(req.url, "http://localhost");
+  const url = new URL(req.url, 'http://localhost');
 
   // Try query param token (demo tokens)
-  const queryToken = url.searchParams.get("token");
+  const queryToken = url.searchParams.get('token');
   if (queryToken && DEMO_TOKENS.has(queryToken)) {
-    return { type: "demo", ...DEMO_TOKENS.get(queryToken) };
+    return { type: 'demo', ...DEMO_TOKENS.get(queryToken) };
   }
 
   // Try Authorization header (JWT from NestJS)
   const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
     const jwt = authHeader.slice(7);
     const payload = decodeJwtPayload(jwt);
     if (payload && !isJwtExpired(payload)) {
       return {
-        type: "jwt",
+        type: 'jwt',
         role: payload.role,
         userId: payload.sub,
         email: payload.email,
@@ -797,7 +797,7 @@ function getAuthFromRequest(req) {
     const payload = decodeJwtPayload(queryToken);
     if (payload && !isJwtExpired(payload)) {
       return {
-        type: "jwt",
+        type: 'jwt',
         role: payload.role,
         userId: payload.sub,
         email: payload.email,
@@ -809,19 +809,19 @@ function getAuthFromRequest(req) {
 }
 
 function handleLocationUpdate(req, res) {
-  let body = "";
-  req.on("data", (chunk) => {
+  let body = '';
+  req.on('data', (chunk) => {
     body += chunk;
   });
-  req.on("end", () => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    res.setHeader("Content-Type", "application/json");
+  req.on('end', () => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Content-Type', 'application/json');
 
     const auth = getAuthFromRequest(req);
-    if (!auth || (auth.role !== "driver" && auth.role !== "dispatch")) {
+    if (!auth || (auth.role !== 'driver' && auth.role !== 'dispatch')) {
       res.statusCode = 401;
-      res.end(JSON.stringify({ error: "Unauthorized" }));
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
       return;
     }
 
@@ -830,35 +830,46 @@ function handleLocationUpdate(req, res) {
       payload = JSON.parse(body);
     } catch (err) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "Invalid JSON body" }));
+      res.end(JSON.stringify({ error: 'Invalid JSON body' }));
       return;
     }
 
     const driverId = payload.driverId || auth.driverId;
     if (!driverId) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "driverId required" }));
+      res.end(JSON.stringify({ error: 'driverId required' }));
       return;
     }
 
-    if (auth.role === "driver" && auth.driverId && auth.driverId !== driverId) {
+    if (auth.role === 'driver' && auth.driverId && auth.driverId !== driverId) {
       res.statusCode = 403;
-      res.end(JSON.stringify({ error: "driverId mismatch" }));
+      res.end(JSON.stringify({ error: 'driverId mismatch' }));
       return;
     }
 
     const lat = Number(payload.lat);
     const lng = Number(payload.lng);
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) {
+    if (
+      !Number.isFinite(lat) ||
+      lat < -90 ||
+      lat > 90 ||
+      !Number.isFinite(lng) ||
+      lng < -180 ||
+      lng > 180
+    ) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "Invalid coordinates: lat must be -90 to 90, lng must be -180 to 180" }));
+      res.end(
+        JSON.stringify({
+          error: 'Invalid coordinates: lat must be -90 to 90, lng must be -180 to 180',
+        }),
+      );
       return;
     }
 
     const driver = drivers.find((d) => d.id === driverId);
     if (!driver) {
       res.statusCode = 404;
-      res.end(JSON.stringify({ error: "driver not found" }));
+      res.end(JSON.stringify({ error: 'driver not found' }));
       return;
     }
 
@@ -872,8 +883,8 @@ function handleLocationUpdate(req, res) {
 }
 
 function handleLatestLocations(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Content-Type", "application/json");
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Type', 'application/json');
   res.statusCode = 200;
   res.end(
     JSON.stringify({
@@ -883,24 +894,24 @@ function handleLatestLocations(req, res) {
         lng: d.lng,
         updatedAt: DRIVER_LAST_UPDATE.get(d.id) || null,
       })),
-    })
+    }),
   );
 }
 
 function handleOrderStatusUpdate(req, res) {
-  let body = "";
-  req.on("data", (chunk) => {
+  let body = '';
+  req.on('data', (chunk) => {
     body += chunk;
   });
-  req.on("end", () => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    res.setHeader("Content-Type", "application/json");
+  req.on('end', () => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Content-Type', 'application/json');
 
     const auth = getAuthFromRequest(req);
-    if (!auth || (auth.role !== "cook" && auth.role !== "driver" && auth.role !== "dispatch")) {
+    if (!auth || (auth.role !== 'cook' && auth.role !== 'driver' && auth.role !== 'dispatch')) {
       res.statusCode = 401;
-      res.end(JSON.stringify({ error: "Unauthorized" }));
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
       return;
     }
 
@@ -909,7 +920,7 @@ function handleOrderStatusUpdate(req, res) {
       payload = JSON.parse(body);
     } catch (err) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "Invalid JSON body" }));
+      res.end(JSON.stringify({ error: 'Invalid JSON body' }));
       return;
     }
 
@@ -917,14 +928,14 @@ function handleOrderStatusUpdate(req, res) {
     const status = payload.status;
     if (!orderId || !status) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "orderId and status required" }));
+      res.end(JSON.stringify({ error: 'orderId and status required' }));
       return;
     }
 
     const order = orders.find((o) => o.id === orderId);
     if (!order) {
       res.statusCode = 404;
-      res.end(JSON.stringify({ error: "order not found" }));
+      res.end(JSON.stringify({ error: 'order not found' }));
       return;
     }
 
@@ -936,19 +947,19 @@ function handleOrderStatusUpdate(req, res) {
 }
 
 function handleEtaRequest(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Content-Type", "application/json");
-  const url = new URL(req.url, "http://localhost");
-  const orderId = url.searchParams.get("orderId");
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Type', 'application/json');
+  const url = new URL(req.url, 'http://localhost');
+  const orderId = url.searchParams.get('orderId');
   if (!orderId) {
     res.statusCode = 400;
-    res.end(JSON.stringify({ error: "orderId required" }));
+    res.end(JSON.stringify({ error: 'orderId required' }));
     return;
   }
   const order = orders.find((o) => o.id === orderId);
   if (!order) {
     res.statusCode = 404;
-    res.end(JSON.stringify({ error: "order not found" }));
+    res.end(JSON.stringify({ error: 'order not found' }));
     return;
   }
   const driver = drivers.find((d) => d.id === order.driverId);
@@ -956,7 +967,7 @@ function handleEtaRequest(req, res) {
   const customer = customers.find((c) => c.id === order.customerId);
   if (!driver || !cook || !customer) {
     res.statusCode = 404;
-    res.end(JSON.stringify({ error: "missing entities" }));
+    res.end(JSON.stringify({ error: 'missing entities' }));
     return;
   }
 
@@ -980,27 +991,25 @@ function haversine(a, b) {
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);
   const lat2 = toRad(b.lat);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
 const server = http.createServer((_, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS, GET");
-  if (_.method === "OPTIONS") {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
+  if (_.method === 'OPTIONS') {
     res.writeHead(204, {
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
     });
     res.end();
     return;
   }
 
-  if (_.method === "GET" && _.url === "/api/config") {
-    res.writeHead(200, { "Content-Type": "application/json" });
+  if (_.method === 'GET' && _.url === '/api/config') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(
       JSON.stringify({
         name: ROUTING_SERVER_NAME,
@@ -1008,69 +1017,69 @@ const server = http.createServer((_, res) => {
         osrmBaseUrl: process.env.OSRM_BASE_URL || DEFAULT_OSRM,
         mapboxEnabled: Boolean(process.env.MAPBOX_TOKEN),
         googleEnabled: Boolean(process.env.GOOGLE_MAPS_API_KEY),
-      })
+      }),
     );
     return;
   }
 
-  if (_.method === "POST" && _.url === "/api/auth/login") {
+  if (_.method === 'POST' && _.url === '/api/auth/login') {
     handleLogin(_, res);
     return;
   }
 
   // V2 Auth routes - proxy to NestJS auth service
-  if (_.url.startsWith("/api/v2/auth/")) {
-    const authPath = _.url.replace("/api/v2/auth", "/auth");
-    if (_.method === "POST") {
+  if (_.url.startsWith('/api/v2/auth/')) {
+    const authPath = _.url.replace('/api/v2/auth', '/auth');
+    if (_.method === 'POST') {
       handleV2Auth(_, res, authPath);
       return;
     }
-    if (_.method === "OPTIONS") {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (_.method === 'OPTIONS') {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
       res.statusCode = 204;
       res.end();
       return;
     }
   }
 
-  if (_.method === "GET" && _.url.startsWith("/api/me")) {
+  if (_.method === 'GET' && _.url.startsWith('/api/me')) {
     handleMe(_, res);
     return;
   }
 
-  if (_.method === "POST" && _.url.startsWith("/api/location")) {
+  if (_.method === 'POST' && _.url.startsWith('/api/location')) {
     handleLocationUpdate(_, res);
     return;
   }
 
-  if (_.method === "GET" && _.url === "/api/locations/latest") {
+  if (_.method === 'GET' && _.url === '/api/locations/latest') {
     handleLatestLocations(_, res);
     return;
   }
 
-  if (_.method === "POST" && _.url.startsWith("/api/orders/status")) {
+  if (_.method === 'POST' && _.url.startsWith('/api/orders/status')) {
     handleOrderStatusUpdate(_, res);
     return;
   }
 
-  if (_.method === "GET" && _.url.startsWith("/api/orders/eta")) {
+  if (_.method === 'GET' && _.url.startsWith('/api/orders/eta')) {
     handleEtaRequest(_, res);
     return;
   }
 
-  if (_.method === "GET" && _.url.startsWith("/api/dispatch/batches")) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Content-Type", "application/json");
+  if (_.method === 'GET' && _.url.startsWith('/api/dispatch/batches')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
     res.statusCode = 200;
     res.end(JSON.stringify({ batches: buildBatches() }));
     return;
   }
 
-  if (_.method === "POST" && _.url.startsWith("/api/dispatch/assign")) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Content-Type", "application/json");
+  if (_.method === 'POST' && _.url.startsWith('/api/dispatch/assign')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
     refreshDriverScores();
     const assignments = assignDrivers();
     saveState();
@@ -1079,31 +1088,31 @@ const server = http.createServer((_, res) => {
     return;
   }
 
-  if (_.method === "GET" && _.url.startsWith("/api/drivers/scores")) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Content-Type", "application/json");
+  if (_.method === 'GET' && _.url.startsWith('/api/drivers/scores')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
     refreshDriverScores();
     res.statusCode = 200;
     res.end(JSON.stringify({ scores: Object.fromEntries(DRIVER_SCORES) }));
     return;
   }
 
-  if (_.method === "GET" && _.url.startsWith("/api/pricing/quote")) {
-    const url = new URL(_.url, "http://localhost");
-    const cookId = url.searchParams.get("cookId");
-    const customerId = url.searchParams.get("customerId");
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Content-Type", "application/json");
+  if (_.method === 'GET' && _.url.startsWith('/api/pricing/quote')) {
+    const url = new URL(_.url, 'http://localhost');
+    const cookId = url.searchParams.get('cookId');
+    const customerId = url.searchParams.get('customerId');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
     if (!cookId || !customerId) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "cookId and customerId required" }));
+      res.end(JSON.stringify({ error: 'cookId and customerId required' }));
       return;
     }
     const cook = cooks.find((c) => c.id === cookId);
     const customer = customers.find((c) => c.id === customerId);
     if (!cook || !customer) {
       res.statusCode = 404;
-      res.end(JSON.stringify({ error: "not found" }));
+      res.end(JSON.stringify({ error: 'not found' }));
       return;
     }
     const priceCents = estimatePriceCents(cook, customer);
@@ -1112,18 +1121,18 @@ const server = http.createServer((_, res) => {
     return;
   }
 
-  if (_.method === "GET" && _.url.startsWith("/api/alerts")) {
+  if (_.method === 'GET' && _.url.startsWith('/api/alerts')) {
     detectAlerts();
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Content-Type", "application/json");
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
     res.statusCode = 200;
     res.end(JSON.stringify({ alerts: ALERTS }));
     return;
   }
 
-  if (_.method === "GET" && _.url.startsWith("/api/summary")) {
+  if (_.method === 'GET' && _.url.startsWith('/api/summary')) {
     detectAlerts();
-    const activeOrders = orders.filter((o) => o.status !== "delivered");
+    const activeOrders = orders.filter((o) => o.status !== 'delivered');
     const avgEta = activeOrders.length
       ? Math.round(
           activeOrders.reduce((acc, o) => {
@@ -1131,7 +1140,7 @@ const server = http.createServer((_, res) => {
             const cook = cooks.find((c) => c.id === o.cookId);
             const customer = customers.find((c) => c.id === o.customerId);
             return acc + estimateEtaSeconds(driver, cook, customer);
-          }, 0) / activeOrders.length
+          }, 0) / activeOrders.length,
         )
       : 0;
     const surgeOrders = activeOrders.filter((o) => {
@@ -1139,8 +1148,8 @@ const server = http.createServer((_, res) => {
       const customer = customers.find((c) => c.id === o.customerId);
       return cook && customer && haversine(cook, customer) > DENSITY_RADIUS_KM;
     }).length;
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Content-Type", "application/json");
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
     res.statusCode = 200;
     res.end(
       JSON.stringify({
@@ -1148,21 +1157,21 @@ const server = http.createServer((_, res) => {
         avgEtaMinutes: Math.round(avgEta / 60),
         surgeOrders,
         alerts: ALERTS.length,
-      })
+      }),
     );
     return;
   }
 
-  if (_.method === "POST" && _.url === "/api/route") {
+  if (_.method === 'POST' && _.url === '/api/route') {
     handleRouteRequest(_, res);
     return;
   }
 
-  res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("RideNDine live GPS demo server\n");
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('RideNDine live GPS demo server\n');
 });
 
-server.on("upgrade", (req, socket, head) => {
+server.on('upgrade', (req, socket, head) => {
   acceptWebSocket(req, socket, head);
 });
 

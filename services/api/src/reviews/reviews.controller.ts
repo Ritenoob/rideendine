@@ -148,9 +148,7 @@ export class ReviewsController {
    * Public endpoint - hidden reviews are not accessible
    */
   @Get(':id')
-  async getReviewById(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<{ review: ReviewResponse }> {
+  async getReviewById(@Param('id', ParseUUIDPipe) id: string): Promise<{ review: ReviewResponse }> {
     return this.reviewsService.getReviewById(id, false);
   }
 

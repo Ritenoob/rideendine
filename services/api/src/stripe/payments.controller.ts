@@ -23,9 +23,7 @@ export class PaymentsController {
     // Create or retrieve Stripe customer
     const customer = await this.stripeService.createOrRetrieveCustomer({
       email: userProfile.email,
-      name: firstName
-        ? `${firstName} ${lastName || ''}`.trim()
-        : undefined,
+      name: firstName ? `${firstName} ${lastName || ''}`.trim() : undefined,
       existingCustomerId: userProfile.stripeCustomerId,
     });
 

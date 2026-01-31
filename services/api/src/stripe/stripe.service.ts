@@ -159,13 +159,10 @@ export class StripeService {
         },
       });
 
-      this.logger.log(
-        `Created PaymentIntent ${paymentIntent.id} for order ${params.orderNumber}`,
-      );
+      this.logger.log(`Created PaymentIntent ${paymentIntent.id} for order ${params.orderNumber}`);
       return paymentIntent;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to create PaymentIntent: ${errorMessage}`);
       throw new InternalServerErrorException('Failed to create payment');
     }
@@ -174,14 +171,11 @@ export class StripeService {
   /**
    * Retrieve a PaymentIntent
    */
-  async retrievePaymentIntent(
-    paymentIntentId: string,
-  ): Promise<Stripe.PaymentIntent> {
+  async retrievePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
     try {
       return await this.stripe.paymentIntents.retrieve(paymentIntentId);
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to retrieve PaymentIntent: ${errorMessage}`);
       throw new InternalServerErrorException('Failed to retrieve payment');
     }
@@ -190,17 +184,13 @@ export class StripeService {
   /**
    * Cancel a PaymentIntent
    */
-  async cancelPaymentIntent(
-    paymentIntentId: string,
-  ): Promise<Stripe.PaymentIntent> {
+  async cancelPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
     try {
-      const paymentIntent =
-        await this.stripe.paymentIntents.cancel(paymentIntentId);
+      const paymentIntent = await this.stripe.paymentIntents.cancel(paymentIntentId);
       this.logger.log(`Cancelled PaymentIntent: ${paymentIntentId}`);
       return paymentIntent;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to cancel PaymentIntent: ${errorMessage}`);
       throw new InternalServerErrorException('Failed to cancel payment');
     }
@@ -221,13 +211,10 @@ export class StripeService {
         reason: params.reason || 'requested_by_customer',
       });
 
-      this.logger.log(
-        `Created refund ${refund.id} for PaymentIntent ${params.paymentIntentId}`,
-      );
+      this.logger.log(`Created refund ${refund.id} for PaymentIntent ${params.paymentIntentId}`);
       return refund;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to create refund: ${errorMessage}`);
       throw new InternalServerErrorException('Failed to create refund');
     }
@@ -243,9 +230,7 @@ export class StripeService {
   }): Promise<Stripe.Customer> {
     try {
       if (params.existingCustomerId) {
-        return (await this.stripe.customers.retrieve(
-          params.existingCustomerId,
-        )) as Stripe.Customer;
+        return (await this.stripe.customers.retrieve(params.existingCustomerId)) as Stripe.Customer;
       }
 
       const customer = await this.stripe.customers.create({
@@ -256,8 +241,7 @@ export class StripeService {
       this.logger.log(`Created Stripe customer: ${customer.id}`);
       return customer;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to create/retrieve customer: ${errorMessage}`);
       throw new InternalServerErrorException('Failed to process customer');
     }
@@ -276,8 +260,7 @@ export class StripeService {
       this.logger.log(`Created ephemeral key for customer: ${customerId}`);
       return ephemeralKey;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to create ephemeral key: ${errorMessage}`);
       throw new InternalServerErrorException('Failed to create ephemeral key');
     }

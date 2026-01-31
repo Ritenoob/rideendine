@@ -2,10 +2,10 @@
 
 /**
  * Create Admin User Script
- * 
+ *
  * Usage:
  *   ts-node scripts/create-admin.ts --email admin@ridendine.com --password AdminPassword123!
- * 
+ *
  * This script creates a new admin user in the database.
  */
 
@@ -36,10 +36,9 @@ async function createAdmin(userData: AdminUser): Promise<void> {
     console.log('🔌 Connecting to database...');
 
     // Check if user already exists
-    const existingUser = await pool.query(
-      'SELECT id, email, role FROM users WHERE email = $1',
-      [userData.email]
-    );
+    const existingUser = await pool.query('SELECT id, email, role FROM users WHERE email = $1', [
+      userData.email,
+    ]);
 
     if (existingUser.rows.length > 0) {
       const user = existingUser.rows[0];
@@ -47,8 +46,12 @@ async function createAdmin(userData: AdminUser): Promise<void> {
         console.log(`❌ Admin user with email ${userData.email} already exists (ID: ${user.id})`);
         process.exit(1);
       } else {
-        console.log(`⚠️  User with email ${userData.email} exists but is not an admin (role: ${user.role})`);
-        console.log('   Would you like to upgrade this user to admin? (Not implemented - manual DB update required)');
+        console.log(
+          `⚠️  User with email ${userData.email} exists but is not an admin (role: ${user.role})`,
+        );
+        console.log(
+          '   Would you like to upgrade this user to admin? (Not implemented - manual DB update required)',
+        );
         process.exit(1);
       }
     }
@@ -77,7 +80,7 @@ async function createAdmin(userData: AdminUser): Promise<void> {
         userData.fullName || 'Admin User',
         true, // Admin users are auto-verified
         true,
-      ]
+      ],
     );
 
     const newAdmin = result.rows[0];
@@ -91,7 +94,6 @@ async function createAdmin(userData: AdminUser): Promise<void> {
     console.log(`📅 Created:    ${newAdmin.created_at}`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     console.log('🔑 You can now log in with these credentials.');
-
   } catch (error) {
     console.error('❌ Error creating admin user:', error);
     throw error;
@@ -121,9 +123,13 @@ function parseArgs(): AdminUser {
   if (!userData.email || !userData.password) {
     console.error('❌ Error: --email and --password are required');
     console.log('\nUsage:');
-    console.log('  ts-node scripts/create-admin.ts --email <email> --password <password> [--name <full name>]');
+    console.log(
+      '  ts-node scripts/create-admin.ts --email <email> --password <password> [--name <full name>]',
+    );
     console.log('\nExample:');
-    console.log('  ts-node scripts/create-admin.ts --email admin@ridendine.com --password Admin123! --name "Admin User"');
+    console.log(
+      '  ts-node scripts/create-admin.ts --email admin@ridendine.com --password Admin123! --name "Admin User"',
+    );
     process.exit(1);
   }
 

@@ -1,5 +1,7 @@
 # Developer Task Roadmap (Sprint Plan)
 
+> **Status:** ⚠️ PLANNED — Sprint roadmap only. Development has not started.
+
 ## Sprint 1 — MVP Ordering + Single Chef
 - Customer ordering
 - Stripe payment collection

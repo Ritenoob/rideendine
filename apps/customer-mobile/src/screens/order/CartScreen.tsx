@@ -1,0 +1,436 @@
+/**
+ * Cart Screen - View and manage cart items
+ */
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Image,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { Button, Card } from '@/components/ui';
+import { useCartStore } from '@/store';
+
+export default function CartScreen() {
+  const navigation = useNavigation<any>();
+  const {
+    chef,
+    items,
+    subtotal,
+    deliveryFee,
+    serviceFee,
+    tax,
+    tip,
+    total,
+    setTip,
+    updateItemQuantity,
+    removeItem,
+    clearCart,
+  } = useCartStore();
+
+  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+  const tipOptions = [0, 200, 300, 500]; // $0, $2, $3, $5
+
+  const handleCheckout = () => {
+    if (!chef) return;
+
+    if (subtotal < chef.minimumOrder) {
+      Alert.alert(
+        'Minimum Order Not Met',
+        `This chef requires a minimum order of ${formatCurrency(chef.minimumOrder)}. Please add more items.`
+      );
+      return;
+    }
+
+    navigation.navigate('Checkout');
+  };
+
+  const handleClearCart = () => {
+    Alert.alert('Clear Cart', 'Are you sure you want to remove all items?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear', style: 'destructive', onPress: clearCart },
+    ]);
+  };
+
+  if (items.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyIcon}>🛒</Text>
+        <Text style={styles.emptyTitle}>Your cart is empty</Text>
+        <Text style={styles.emptyText}>
+          Add some delicious items from our chefs
+        </Text>
+        <Button
+          title="Browse Chefs"
+          onPress={() => navigation.navigate('Main')}
+          style={styles.browseButton}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Chef Header */}
+        {chef && (
+          <View style={styles.chefHeader}>
+            <Image
+              source={{
+                uri: chef.profileImageUrl || 'https://via.placeholder.com/50',
+              }}
+              style={styles.chefImage}
+            />
+            <View>
+              <Text style={styles.chefName}>{chef.businessName}</Text>
+              <Text style={styles.chefAddress}>{chef.city}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Cart Items */}
+        <Card style={styles.itemsCard}>
+          {items.map((cartItem, index) => (
+            <View
+              key={cartItem.menuItem.id}
+              style={[
+                styles.cartItem,
+                index < items.length - 1 && styles.cartItemBorder,
+              ]}
+            >
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName}>{cartItem.menuItem.name}</Text>
+                <Text style={styles.itemPrice}>
+                  {formatCurrency(cartItem.menuItem.price)}
+                </Text>
+                {cartItem.specialInstructions && (
+                  <Text style={styles.itemInstructions}>
+                    Note: {cartItem.specialInstructions}
+                  </Text>
+                )}
+              </View>
+
+              <View style={styles.quantityControls}>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() =>
+                    cartItem.quantity === 1
+                      ? removeItem(cartItem.menuItem.id)
+                      : updateItemQuantity(
+                          cartItem.menuItem.id,
+                          cartItem.quantity - 1
+                        )
+                  }
+                >
+                  <Text style={styles.quantityButtonText}>
+                    {cartItem.quantity === 1 ? '🗑️' : '−'}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.quantity}>{cartItem.quantity}</Text>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() =>
+                    updateItemQuantity(
+                      cartItem.menuItem.id,
+                      cartItem.quantity + 1
+                    )
+                  }
+                >
+                  <Text style={styles.quantityButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+
+          <TouchableOpacity
+            style={styles.clearButton}
+            onPress={handleClearCart}
+          >
+            <Text style={styles.clearButtonText}>Clear Cart</Text>
+          </TouchableOpacity>
+        </Card>
+
+        {/* Tip Section */}
+        <Card style={styles.tipCard}>
+          <Text style={styles.tipTitle}>Add a tip for your driver</Text>
+          <View style={styles.tipOptions}>
+            {tipOptions.map((tipAmount) => (
+              <TouchableOpacity
+                key={tipAmount}
+                style={[
+                  styles.tipOption,
+                  tip === tipAmount && styles.tipOptionActive,
+                ]}
+                onPress={() => setTip(tipAmount)}
+              >
+                <Text
+                  style={[
+                    styles.tipOptionText,
+                    tip === tipAmount && styles.tipOptionTextActive,
+                  ]}
+                >
+                  {tipAmount === 0 ? 'No Tip' : formatCurrency(tipAmount)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Card>
+
+        {/* Order Summary */}
+        <Card style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Order Summary</Text>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Subtotal</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(subtotal)}</Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Delivery Fee</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(deliveryFee)}</Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Service Fee</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(serviceFee)}</Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Tax</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(tax)}</Text>
+          </View>
+
+          {tip > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Tip</Text>
+              <Text style={styles.summaryValue}>{formatCurrency(tip)}</Text>
+            </View>
+          )}
+
+          <View style={[styles.summaryRow, styles.totalRow]}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
+          </View>
+        </Card>
+      </ScrollView>
+
+      {/* Checkout Footer */}
+      <View style={styles.footer}>
+        <Button
+          title={`Checkout - ${formatCurrency(total)}`}
+          onPress={handleCheckout}
+          size="large"
+        />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f7f4ee',
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  browseButton: {
+    minWidth: 200,
+  },
+  chefHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  chefImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#e0e0e0',
+  },
+  chefName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+  },
+  chefAddress: {
+    fontSize: 13,
+    color: '#5f5f5f',
+  },
+  itemsCard: {
+    marginBottom: 16,
+  },
+  cartItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  cartItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#151515',
+  },
+  itemPrice: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    marginTop: 2,
+  },
+  itemInstructions: {
+    fontSize: 12,
+    color: '#9e9e9e',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quantityButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityButtonText: {
+    fontSize: 16,
+    color: '#ff9800',
+    fontWeight: '600',
+  },
+  quantity: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  clearButton: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  clearButtonText: {
+    fontSize: 14,
+    color: '#d32f2f',
+    textAlign: 'center',
+  },
+  tipCard: {
+    marginBottom: 16,
+  },
+  tipTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#151515',
+    marginBottom: 12,
+  },
+  tipOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tipOption: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  tipOptionActive: {
+    backgroundColor: '#ff9800',
+  },
+  tipOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5f5f5f',
+  },
+  tipOptionTextActive: {
+    color: '#fff',
+  },
+  summaryCard: {
+    marginBottom: 16,
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#5f5f5f',
+  },
+  summaryValue: {
+    fontSize: 14,
+    color: '#151515',
+  },
+  totalRow: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#151515',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    paddingBottom: 32,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+});

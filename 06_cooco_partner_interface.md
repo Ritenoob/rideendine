@@ -1,5 +1,7 @@
 # COOCO Partner Interface Contract
 
+> **Status:** ⚠️ PLANNED — Interface contract defined. Not yet implemented.
+
 ## Purpose
 Defines how the platform exchanges data with COOCO for order fulfillment and delivery confirmation.
 

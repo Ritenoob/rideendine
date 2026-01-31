@@ -1,0 +1,748 @@
+# Order Management API Endpoints
+
+Complete documentation for order creation, payment, and state management.
+
+---
+
+## Overview
+
+The Order API provides endpoints for:
+- Creating orders from chef menus
+- Processing payments via Stripe
+- Managing order lifecycle (accept, reject, cancel, refund)
+- Tracking order status through 12-state machine
+- Querying orders with filters
+
+**Base URL:** `http://localhost:9001`
+
+---
+
+## Authentication
+
+All endpoints require JWT authentication via `Authorization: Bearer <token>` header.
+
+Role-based access control (RBAC) enforced on specific endpoints.
+
+---
+
+## Endpoints
+
+### 1. Create Order
+
+**POST** `/orders`
+
+Create a new order from a chef's menu.
+
+**Authorization:** Customer only
+
+**Request Body:**
+```json
+{
+  "chefId": "uuid",
+  "deliveryAddress": "123 Main St, City, State 12345",
+  "deliveryLatitude": 37.7749,
+  "deliveryLongitude": -122.4194,
+  "deliveryInstructions": "Leave at door",
+  "scheduledDeliveryTime": "2026-01-31T18:00:00Z",
+  "items": [
+    {
+      "menuItemId": "uuid",
+      "quantity": 2,
+      "notes": "Extra spicy"
+    },
+    {
+      "menuItemId": "uuid",
+      "quantity": 1
+    }
+  ]
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "id": "uuid",
+  "orderNumber": "RND-20260131-0001",
+  "status": "pending",
+  "chefId": "uuid",
+  "customerId": "uuid",
+  "deliveryAddress": "123 Main St, City, State 12345",
+  "deliveryLatitude": 37.7749,
+  "deliveryLongitude": -122.4194,
+  "deliveryInstructions": "Leave at door",
+  "scheduledDeliveryTime": "2026-01-31T18:00:00Z",
+  "subtotalCents": 3000,
+  "taxCents": 240,
+  "deliveryFeeCents": 500,
+  "platformFeeCents": 450,
+  "totalCents": 4190,
+  "items": [
+    {
+      "menuItemId": "uuid",
+      "menuItemName": "Pad Thai",
+      "quantity": 2,
+      "priceCents": 1200,
+      "totalCents": 2400,
+      "notes": "Extra spicy"
+    },
+    {
+      "menuItemId": "uuid",
+      "menuItemName": "Spring Rolls",
+      "quantity": 1,
+      "priceCents": 600,
+      "totalCents": 600
+    }
+  ],
+  "createdAt": "2026-01-31T10:00:00Z"
+}
+```
+
+**Validation:**
+- Chef must be active, verified, and Stripe onboarding complete
+- All menu items must exist, belong to chef, and be available
+- Subtotal must meet chef's minimum order amount
+- Transaction-safe: creates order, order_items, and status_history atomically
+
+**Commission Breakdown:**
+- Platform fee: 15% of subtotal
+- Tax: 8% of subtotal
+- Delivery fee: $5.00 (fixed)
+- Total: subtotal + tax + delivery_fee
+- Chef earning: 85% of subtotal
+
+---
+
+### 2. Get Order Details
+
+**GET** `/orders/:id`
+
+Retrieve full order details including items and status history.
+
+**Authorization:** 
+- Customer: can view own orders
+- Chef: can view orders for their restaurant
+- Driver: can view assigned orders
+- Admin: can view all orders
+
+**Response:** `200 OK`
+```json
+{
+  "id": "uuid",
+  "orderNumber": "RND-20260131-0001",
+  "status": "payment_confirmed",
+  "chefId": "uuid",
+  "chefName": "Chef's Kitchen",
+  "customerId": "uuid",
+  "customerName": "John Doe",
+  "driverId": null,
+  "driverName": null,
+  "deliveryAddress": "123 Main St, City, State 12345",
+  "deliveryInstructions": "Leave at door",
+  "scheduledDeliveryTime": "2026-01-31T18:00:00Z",
+  "subtotalCents": 3000,
+  "taxCents": 240,
+  "deliveryFeeCents": 500,
+  "platformFeeCents": 450,
+  "totalCents": 4190,
+  "items": [
+    {
+      "id": "uuid",
+      "menuItemName": "Pad Thai",
+      "quantity": 2,
+      "priceCents": 1200,
+      "totalCents": 2400,
+      "notes": "Extra spicy"
+    }
+  ],
+  "createdAt": "2026-01-31T10:00:00Z",
+  "acceptedAt": null,
+  "readyAt": null,
+  "pickedUpAt": null,
+  "deliveredAt": null
+}
+```
+
+---
+
+### 3. Get Order ETA
+
+**GET** `/orders/eta?orderId=<uuid>`
+
+Calculate the current ETA for an order using the routing service (fallbacks to a distance-based estimate).
+
+**Authorization:**
+- Customer: can view own orders
+- Chef: can view orders for their restaurant
+- Driver: can view assigned orders
+- Admin: can view all orders
+
+**Response:** `200 OK`
+```json
+{
+  "orderId": "uuid",
+  "status": "in_transit",
+  "provider": "osrm",
+  "distanceMeters": 4821,
+  "durationSeconds": 812,
+  "etaMinutes": 14,
+  "estimatedArrival": "2026-01-31T19:12:00Z",
+  "from": { "latitude": 37.775, "longitude": -122.419 },
+  "to": { "latitude": 37.784, "longitude": -122.406 }
+}
+```
+
+**Notes:**
+- When status is `assigned_to_driver`, `picked_up`, or `in_transit`, the ETA uses the driver's current location when available.
+- Otherwise, the ETA uses the chef location as the start point.
+- If the routing service is unavailable, the response uses an estimate with `provider: "estimate"`.
+
+---
+
+### 4. List Orders
+
+**GET** `/orders?status=pending&page=1&perPage=20`
+
+List orders with filtering and pagination.
+
+**Authorization:** All authenticated users (filtered by role)
+
+**Query Parameters:**
+- `status` (optional): Filter by status
+- `chefId` (optional, admin only): Filter by chef
+- `customerId` (optional, admin only): Filter by customer
+- `driverId` (optional, admin only): Filter by driver
+- `page` (optional, default: 1): Page number
+- `perPage` (optional, default: 20, max: 100): Results per page
+
+**Response:** `200 OK`
+```json
+{
+  "orders": [
+    {
+      "id": "uuid",
+      "orderNumber": "RND-20260131-0001",
+      "status": "pending",
+      "chefId": "uuid",
+      "chefName": "Chef's Kitchen",
+      "totalCents": 4190,
+      "createdAt": "2026-01-31T10:00:00Z"
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "perPage": 20,
+  "totalPages": 3
+}
+```
+
+**Role-based Filtering:**
+- Customer: sees only their orders
+- Chef: sees only orders for their restaurant
+- Driver: sees only assigned orders
+- Admin: sees all orders
+
+---
+
+### 5. Create Payment Intent
+
+**POST** `/orders/:id/create-payment-intent`
+
+Generate a Stripe PaymentIntent for order payment.
+
+**Authorization:** Customer only (must own the order)
+
+**Request Body:** None
+
+**Response:** `200 OK`
+```json
+{
+  "clientSecret": "pi_xxx_secret_xxx",
+  "paymentIntentId": "pi_xxx",
+  "amountCents": 4190
+}
+```
+
+**Flow:**
+1. Validates order ownership and status (must be `pending`)
+2. Checks for existing payment intent (returns if found)
+3. Creates or retrieves Stripe customer for user
+4. Creates PaymentIntent with destination charge to chef's Stripe account
+5. Platform fee (commission + tax) kept as application_fee_amount
+6. Saves payment record in database
+7. Returns client_secret for frontend to confirm payment
+
+**Stripe Integration:**
+- Destination charges pattern
+- Application fee: platform_fee + tax
+- Transfer to chef: subtotal - platform_fee
+- Metadata: order_id, order_number
+
+---
+
+### 6. Accept Order (Chef)
+
+**PATCH** `/orders/:id/accept`
+
+Chef accepts an order to begin preparation.
+
+**Authorization:** Chef only (must own the chef profile)
+
+**Request Body:** None
+
+**Response:** `200 OK`
+```json
+{
+  "id": "uuid",
+  "orderNumber": "RND-20260131-0001",
+  "status": "accepted",
+  "message": "Order accepted successfully"
+}
+```
+
+**State Transition:** `payment_confirmed` → `accepted`
+
+**Side Effects:**
+- Sets `accepted_at` timestamp
+- Creates status history entry
+- TODO: Sends notification to customer
+
+---
+
+### 7. Reject Order (Chef)
+
+**PATCH** `/orders/:id/reject`
+
+Chef rejects an order (automatically triggers refund if paid).
+
+**Authorization:** Chef only (must own the chef profile)
+
+**Request Body:**
+```json
+{
+  "rejectionReason": "Out of ingredients for this dish"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "id": "uuid",
+  "orderNumber": "RND-20260131-0001",
+  "status": "rejected",
+  "message": "Order rejected",
+  "refundInitiated": true
+}
+```
+
+**State Transition:** `payment_confirmed` → `rejected`
+
+**Side Effects:**
+- Sets `rejection_reason`
+- Creates status history entry with reason
+- Automatically initiates Stripe refund if payment was made
+- Refund transitions order to `refunded` state
+- TODO: Sends notification to customer
+
+---
+
+### 8. Mark Order Ready (Chef)
+
+**PATCH** `/orders/:id/ready`
+
+Chef marks order as ready for driver pickup.
+
+**Authorization:** Chef only (must own the chef profile)
+
+**Request Body:** None
+
+**Response:** `200 OK`
+```json
+{
+  "id": "uuid",
+  "orderNumber": "RND-20260131-0001",
+  "status": "ready_for_pickup",
+  "message": "Order marked as ready for pickup"
+}
+```
+
+**State Transition:** `preparing` → `ready_for_pickup`
+
+**Side Effects:**
+- Sets `ready_at` timestamp
+- Creates status history entry
+- Order becomes available for driver assignment
+- TODO: Notifies nearby drivers
+
+---
+
+### 9. Cancel Order
+
+**PATCH** `/orders/:id/cancel`
+
+Cancel an order (customer, chef, or admin).
+
+**Authorization:** 
+- Customer: can cancel own orders before chef accepts
+- Chef: can cancel orders before marking ready
+- Admin: can cancel any order
+
+**Request Body:**
+```json
+{
+  "cancellationReason": "Customer requested cancellation"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "id": "uuid",
+  "orderNumber": "RND-20260131-0001",
+  "status": "cancelled",
+  "message": "Order cancelled successfully",
+  "refundInitiated": false
+}
+```
+
+**State Transition:** 
+- `pending` → `cancelled` (no refund needed)
+- `payment_confirmed`+ → `cancelled` → `refunded` (auto refund)
+
+**Side Effects:**
+- Creates status history entry with reason
+- Initiates refund if payment was made
+- TODO: Sends notification to all parties
+
+---
+
+### 10. Refund Order
+
+**POST** `/orders/:id/refund`
+
+Process a full or partial refund.
+
+**Authorization:** Admin or Chef (chef can only refund own orders)
+
+**Request Body:**
+```json
+{
+  "amountCents": 4190,
+  "reason": "Customer complaint - food quality issue",
+  "isPartial": false
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "id": "uuid",
+  "orderNumber": "RND-20260131-0001",
+  "status": "refunded",
+  "refundAmount": 4190,
+  "message": "Refund processed successfully"
+}
+```
+
+**Validation:**
+- Order must be in refundable state
+- Payment must have succeeded
+- Amount must not exceed original payment
+- Partial refunds supported (optional)
+
+**Side Effects:**
+- Creates Stripe refund
+- Updates payment status to 'refunded'
+- Updates order status to 'refunded'
+- Adjusts chef ledger entry (deduct refunded amount)
+- Creates status history entry
+
+---
+
+## Order State Machine
+
+### States (12 total)
+
+**Primary Flow:**
+```
+pending → payment_confirmed → accepted → preparing → 
+ready_for_pickup → assigned_to_driver → picked_up → 
+in_transit → delivered
+```
+
+**Cancellation Flow:**
+```
+pending → cancelled (no refund)
+payment_confirmed+ → rejected/cancelled → refunded
+```
+
+**Terminal States:**
+- `delivered` (successful completion)
+- `refunded` (cancelled after payment)
+- `cancelled` (cancelled before payment)
+
+### State Descriptions
+
+| State | Description | Next Valid States |
+|-------|-------------|-------------------|
+| **pending** | Order created, awaiting payment | payment_confirmed, cancelled |
+| **payment_confirmed** | Payment successful via webhook | accepted, rejected |
+| **accepted** | Chef accepted order | preparing, rejected |
+| **preparing** | Chef is preparing food | ready_for_pickup, rejected |
+| **ready_for_pickup** | Food ready, needs driver | assigned_to_driver |
+| **assigned_to_driver** | Driver assigned | picked_up |
+| **picked_up** | Driver picked up from chef | in_transit |
+| **in_transit** | Driver delivering to customer | delivered |
+| **delivered** | Order completed ✅ | *(terminal)* |
+| **rejected** | Chef rejected order | refunded |
+| **cancelled** | Order cancelled | refunded (if paid) |
+| **refunded** | Payment refunded ✅ | *(terminal)* |
+
+---
+
+## Webhook Events
+
+### Stripe Payment Webhook
+
+**Endpoint:** `POST /webhooks/stripe`
+
+**Events Handled:**
+- `payment_intent.succeeded` - Payment confirmed, update order status
+- `payment_intent.payment_failed` - Payment failed, log error
+- `account.updated` - Chef Stripe account updated
+- `account.application.deauthorized` - Chef disconnected Stripe
+
+**Payment Success Flow:**
+1. Webhook receives `payment_intent.succeeded`
+2. Extracts `order_id` from metadata
+3. Updates payment status to 'succeeded'
+4. Updates order status to 'payment_confirmed'
+5. Creates chef_ledger entry (available_for_payout = false)
+6. Creates status history entry
+7. TODO: Sends notification to chef
+
+**Webhook Verification:**
+- Requires raw body (not JSON parsed)
+- Verifies signature with `STRIPE_WEBHOOK_SECRET`
+- Returns 200 OK even if processing fails (prevents retries)
+
+**Testing with Stripe CLI:**
+```bash
+stripe listen --forward-to localhost:9001/webhooks/stripe
+stripe trigger payment_intent.succeeded
+```
+
+---
+
+## Error Responses
+
+### 400 Bad Request
+```json
+{
+  "statusCode": 400,
+  "message": "Chef is not currently accepting orders",
+  "error": "Bad Request"
+}
+```
+
+### 403 Forbidden
+```json
+{
+  "statusCode": 403,
+  "message": "You do not own this order",
+  "error": "Forbidden"
+}
+```
+
+### 404 Not Found
+```json
+{
+  "statusCode": 404,
+  "message": "Order not found",
+  "error": "Not Found"
+}
+```
+
+---
+
+## Testing
+
+### Test Order Creation
+
+```bash
+# 1. Get customer token
+TOKEN=$(curl -s -X POST http://localhost:9001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"customer@test.com","password":"Password123!"}' \
+  | jq -r '.access_token')
+
+# 2. Create order
+curl -X POST http://localhost:9001/orders \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chefId": "YOUR_CHEF_ID",
+    "deliveryAddress": "123 Test St, SF, CA",
+    "deliveryLatitude": 37.7749,
+    "deliveryLongitude": -122.4194,
+    "items": [
+      {"menuItemId": "YOUR_ITEM_ID", "quantity": 2}
+    ]
+  }' | jq .
+
+# 3. Create payment intent
+ORDER_ID="uuid-from-step-2"
+curl -X POST http://localhost:9001/orders/$ORDER_ID/create-payment-intent \
+  -H "Authorization: Bearer $TOKEN" | jq .
+
+# 4. Simulate payment success (use Stripe CLI)
+stripe trigger payment_intent.succeeded \
+  --add payment_intent:metadata[order_id]=$ORDER_ID
+
+# 5. Check order status
+curl http://localhost:9001/orders/$ORDER_ID \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+### Test Chef Acceptance
+
+```bash
+# 1. Get chef token
+CHEF_TOKEN=$(curl -s -X POST http://localhost:9001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"chef@test.com","password":"Password123!"}' \
+  | jq -r '.access_token')
+
+# 2. Accept order
+curl -X PATCH http://localhost:9001/orders/$ORDER_ID/accept \
+  -H "Authorization: Bearer $CHEF_TOKEN" | jq .
+
+# 3. Mark ready
+curl -X PATCH http://localhost:9001/orders/$ORDER_ID/ready \
+  -H "Authorization: Bearer $CHEF_TOKEN" | jq .
+```
+
+---
+
+## Database Schema
+
+### orders table
+
+```sql
+CREATE TABLE orders (
+  id UUID PRIMARY KEY,
+  order_number VARCHAR(50) UNIQUE,
+  customer_id UUID REFERENCES users(id),
+  chef_id UUID REFERENCES chefs(id),
+  driver_id UUID REFERENCES users(id),
+  status VARCHAR(50),
+  delivery_address TEXT,
+  delivery_latitude DECIMAL(10, 8),
+  delivery_longitude DECIMAL(11, 8),
+  delivery_instructions TEXT,
+  scheduled_delivery_time TIMESTAMP,
+  subtotal_cents INT,
+  tax_cents INT,
+  delivery_fee_cents INT,
+  platform_fee_cents INT,
+  total_cents INT,
+  rejection_reason TEXT,
+  cancellation_reason TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  accepted_at TIMESTAMP,
+  ready_at TIMESTAMP,
+  picked_up_at TIMESTAMP,
+  delivered_at TIMESTAMP
+);
+```
+
+### order_items table
+
+```sql
+CREATE TABLE order_items (
+  id UUID PRIMARY KEY,
+  order_id UUID REFERENCES orders(id),
+  menu_item_id UUID REFERENCES menu_items(id),
+  menu_item_name VARCHAR(255),
+  quantity INT,
+  price_cents INT,
+  total_cents INT,
+  notes TEXT
+);
+```
+
+### payments table
+
+```sql
+CREATE TABLE payments (
+  id UUID PRIMARY KEY,
+  order_id UUID REFERENCES orders(id),
+  stripe_payment_intent_id VARCHAR(255),
+  amount_cents INT,
+  status VARCHAR(50),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### chef_ledger table
+
+```sql
+CREATE TABLE chef_ledger (
+  id UUID PRIMARY KEY,
+  chef_id UUID REFERENCES chefs(id),
+  order_id UUID REFERENCES orders(id),
+  earning_cents INT,
+  available_for_payout BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+---
+
+## Implementation Notes
+
+### Transaction Safety
+- All order creation uses database transactions (BEGIN/COMMIT/ROLLBACK)
+- Atomic creation of order, order_items, and status_history
+- Rollback on any validation or database error
+
+### Commission Calculation
+- Implemented in `CommissionCalculator` class
+- Platform fee: 15% of subtotal
+- Tax: 8% of subtotal  
+- Delivery fee: $5.00 fixed (Week 5: dynamic based on distance)
+- Chef earnings: 85% of subtotal
+- All amounts rounded to cents
+
+### Order Number Generation
+- Format: `RND-YYYYMMDD-####`
+- Sequence resets daily
+- Example: `RND-20260131-0001`
+- Current implementation: queries count of today's orders
+- Future: database sequence for better concurrency
+
+### Authorization
+- Role-based guards on endpoints (`@Roles()` decorator)
+- Resource ownership checks for orders, chefs
+- Helper method: `userOwnsChef(userId, chefId)`
+
+### Ledger Entries
+- Created on `payment_confirmed` status
+- `available_for_payout = false` initially
+- Set to `true` after 7 days or on order `delivered`
+- Adjusted for refunds (negative entries)
+
+---
+
+## Next Steps (Week 5)
+
+- [ ] Driver module (pickup, delivery endpoints)
+- [ ] Dynamic delivery fee calculation (based on distance)
+- [ ] Automatic driver assignment algorithm
+- [ ] GPS tracking integration
+- [ ] ETA calculation (Mapbox/Google Maps)
+
+---
+
+**Week 4 Status:** 95% Complete (documentation done!)  
+**Build:** ✅ SUCCESS  
+**Tests:** Manual testing required

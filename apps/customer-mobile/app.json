@@ -20,7 +20,11 @@
     },
     "ios": {
       "bundleIdentifier": "com.ridendine.customer",
-      "associatedDomains": []
+      "associatedDomains": [],
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to find chefs near you and enable delivery tracking.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location to provide accurate delivery tracking and find nearby chefs."
+      }
     },
     "version": "1.0.0",
     "orientation": "portrait",
@@ -40,7 +44,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

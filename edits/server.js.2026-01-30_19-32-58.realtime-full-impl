@@ -1,0 +1,83 @@
+const http = require("http");
+const net = require("net");
+const { URL } = require("url");
+
+const PORT = process.env.PORT || 9004;
+const CORE_BASE = process.env.CORE_BASE || "http://localhost:8081";
+
+function proxyHttp(req, res) {
+  const target = new URL(req.url, CORE_BASE);
+  const options = {
+    method: req.method,
+    headers: req.headers,
+  };
+  const proxyReq = http.request(target, options, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode || 500, proxyRes.headers);
+    proxyRes.pipe(res, { end: true });
+    proxyRes.on("error", () => {
+      try { res.end(); } catch (err) {}
+    });
+  });
+  req.pipe(proxyReq, { end: true });
+  proxyReq.on("error", () => {
+    try {
+      res.statusCode = 502;
+      res.end(JSON.stringify({ error: "bad gateway" }));
+    } catch (err) {}
+  });
+  req.on("error", () => {
+    try { proxyReq.end(); } catch (err) {}
+  });
+  res.on("error", () => {});
+}
+
+const server = http.createServer((req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/health") {
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ ok: true, service: "realtime", core: CORE_BASE }));
+    return;
+  }
+
+  proxyHttp(req, res);
+});
+
+server.on("upgrade", (req, socket) => {
+  const target = new URL(CORE_BASE);
+  const proxySocket = net.connect(target.port || 80, target.hostname, () => {
+    proxySocket.write(
+      `${req.method} ${req.url} HTTP/1.1\r\n` +
+      Object.entries(req.headers).map(([k, v]) => `${k}: ${v}`).join("\r\n") +
+      `\r\n\r\n`
+    );
+    socket.pipe(proxySocket);
+    proxySocket.pipe(socket);
+  });
+  proxySocket.on("error", () => {
+    try { socket.end(); } catch (err) {}
+  });
+  socket.on("error", () => {
+    try { proxySocket.end(); } catch (err) {}
+  });
+});
+
+server.on("clientError", (err, socket) => {
+  try {
+    socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+  } catch (error) {}
+});
+
+server.listen(PORT, () => {
+  console.log(`Realtime gateway running on http://localhost:${PORT}`);
+  console.log(`Proxying to core: ${CORE_BASE}`);
+});

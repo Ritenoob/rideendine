@@ -1,0 +1,28 @@
+agents/CLAUDE.md Rebuild Notes
+Date: 2026-01-30
+Author: Claude
+
+REASON FOR REBUILD:
+Original file was a stub with placeholder content that didn't match the actual project.
+
+ISSUES WITH ORIGINAL:
+1. Described "ride services" but RideNDine is a home kitchen food delivery platform
+2. Referenced non-existent files (mcp_config.yaml, logging.yaml)
+3. Placeholder agents (Agent 1, 2, 3) with no actual content
+4. Generic MCP setup instructions not applicable to this project
+5. No connection to actual codebase or documentation
+
+NEW STRUCTURE:
+1. Project Overview - Accurate description of RideNDine
+2. Implementation Status - Links to AGENTS.md status table
+3. Key Documentation - Index of all planning docs with descriptions
+4. Project Conventions - Edit protocol, standards
+5. Development Phases - Summary from DEVELOPMENTPLAN.md
+6. Architecture Overview - Current vs target state
+7. Quick Reference - Essential commands and ports
+
+RELATIONSHIP TO OTHER DOCS:
+- AGENTS.md: Agent roles, skills, detailed file mappings
+- CLAUDE.md: Project context, conventions, doc index
+- README.md: User-facing quick start and troubleshooting
+- DEVELOPMENTPLAN.md: Full 16-week implementation roadmap

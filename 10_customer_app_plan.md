@@ -1,5 +1,7 @@
 # Customer App Plan (Start)
 
+> **Status:** 🔶 PARTIAL — Apps scaffolded in `apps/`. Working prototypes, not production-ready.
+
 Phase 0 — Decisions
 - React Native for iOS/Android
 - Mapbox for maps + routing

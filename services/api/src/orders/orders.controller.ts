@@ -1,0 +1,143 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Query,
+  ParseUUIDPipe,
+  UseGuards,
+} from '@nestjs/common';
+import { OrdersService } from './orders.service';
+import {
+  CreateOrderDto,
+  OrderQueryDto,
+  RejectOrderDto,
+  RefundOrderDto,
+  CancelOrderDto,
+} from './dto/order.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { JwtPayload, UserRole } from '../common/interfaces/user.interface';
+
+@Controller('orders')
+@UseGuards(JwtAuthGuard)
+export class OrdersController {
+  constructor(private readonly ordersService: OrdersService) {}
+
+  @Post()
+  @Roles(UserRole.CUSTOMER)
+  @UseGuards(RolesGuard)
+  async createOrder(
+    @CurrentUser() user: JwtPayload,
+    @Body() createDto: CreateOrderDto,
+  ) {
+    return this.ordersService.createOrder(user.sub, createDto);
+  }
+
+  @Get('eta')
+  async getOrderEta(
+    @CurrentUser() user: JwtPayload,
+    @Query('orderId', new ParseUUIDPipe()) orderId: string,
+  ) {
+    return this.ordersService.getOrderEta(orderId, user.sub, user.role);
+  }
+
+  @Get(':id')
+  async getOrder(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.ordersService.getOrderById(id, user.sub, user.role);
+  }
+
+  @Get()
+  async listOrders(@CurrentUser() user: JwtPayload, @Query() query: OrderQueryDto) {
+    return this.ordersService.listOrders(query, user.sub, user.role);
+  }
+
+  @Post(':id/create-payment-intent')
+  @Roles(UserRole.CUSTOMER)
+  @UseGuards(RolesGuard)
+  async createPaymentIntent(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.ordersService.createPaymentIntent(id, user.sub);
+  }
+
+  @Patch(':id/accept')
+  @Roles(UserRole.CHEF)
+  @UseGuards(RolesGuard)
+  async acceptOrder(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.ordersService.acceptOrder(id, user.sub);
+  }
+
+  @Patch(':id/reject')
+  @Roles(UserRole.CHEF)
+  @UseGuards(RolesGuard)
+  async rejectOrder(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() rejectDto: RejectOrderDto,
+  ) {
+    return this.ordersService.rejectOrder(id, user.sub, rejectDto);
+  }
+
+  @Patch(':id/ready')
+  @Roles(UserRole.CHEF)
+  @UseGuards(RolesGuard)
+  async markReady(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.ordersService.markOrderReady(id, user.sub);
+  }
+
+  @Patch(':id/cancel')
+  async cancelOrder(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() cancelDto: CancelOrderDto,
+  ) {
+    return this.ordersService.cancelOrder(
+      id,
+      user.sub,
+      cancelDto.cancellationReason,
+    );
+  }
+
+  @Post(':id/refund')
+  @Roles(UserRole.ADMIN, UserRole.CHEF)
+  @UseGuards(RolesGuard)
+  async refundOrder(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() refundDto: RefundOrderDto,
+  ) {
+    return this.ordersService.refundOrder(id, user.sub, refundDto);
+  }
+
+  @Patch(':id/pickup')
+  @Roles(UserRole.DRIVER)
+  @UseGuards(RolesGuard)
+  async markPickedUp(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.ordersService.markOrderPickedUp(id, user.sub);
+  }
+
+  @Patch(':id/in-transit')
+  @Roles(UserRole.DRIVER)
+  @UseGuards(RolesGuard)
+  async markInTransit(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.ordersService.markOrderInTransit(id, user.sub);
+  }
+
+  @Patch(':id/deliver')
+  @Roles(UserRole.DRIVER)
+  @UseGuards(RolesGuard)
+  async markDelivered(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.ordersService.markOrderDelivered(id, user.sub);
+  }
+
+  @Get(':id/tracking')
+  async getOrderTracking(@Param('id') id: string) {
+    return this.ordersService.getOrderTracking(id);
+  }
+}

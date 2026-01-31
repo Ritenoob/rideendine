@@ -5,6 +5,7 @@ function CustomerApp() {
   const driverMarkerRef = useRef(null);
   const customerMarkerRef = useRef(null);
   const socketRef = useRef(null);
+  const etaTimerRef = useRef(null);
 
   const [serverUrl, setServerUrl] = useState("http://localhost:8081");
   const [orderId, setOrderId] = useState("");
@@ -12,21 +13,35 @@ function CustomerApp() {
   const [eta, setEta] = useState("");
   const [orderStatus, setOrderStatus] = useState("");
 
+  // V2 Auth state
+  const [authMode, setAuthMode] = useState("demo"); // "demo" or "v2"
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [refreshToken, setRefreshToken] = useState("");
+  const [user, setUser] = useState(null);
+
   useEffect(() => {
     const map = L.map("map").setView([43.2207, -79.7651], 12);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors"
     }).addTo(map);
     mapRef.current = map;
-    return () => map.remove();
+    return () => {
+      if (socketRef.current) socketRef.current.close();
+      if (etaTimerRef.current) clearInterval(etaTimerRef.current);
+      map.remove();
+    };
   }, []);
 
   function updateMarkers(order, data) {
     const map = mapRef.current;
     if (!map || !order) return;
 
-    const customer = data.customers.find(c => c.id === order.customerId);
-    const driver = data.drivers.find(d => d.id === order.driverId);
+    const customers = data.customers || [];
+    const drivers = data.drivers || [];
+    const customer = customers.find(c => c.id === order.customerId);
+    const driver = drivers.find(d => d.id === order.driverId);
 
     if (customer) {
       if (customerMarkerRef.current) map.removeLayer(customerMarkerRef.current);
@@ -52,32 +67,122 @@ function CustomerApp() {
     }
   }
 
+  // V2 Auth: Login with email/password
+  async function handleV2Login() {
+    if (!email || !password) {
+      setStatus("Enter email and password");
+      return;
+    }
+    setStatus("Logging in...");
+    try {
+      const res = await fetch(`${serverUrl}/api/v2/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (res.ok && data.accessToken) {
+        setAccessToken(data.accessToken);
+        setRefreshToken(data.refreshToken);
+        setUser(data.user);
+        setStatus(`Logged in as ${data.user.email}`);
+      } else {
+        setStatus(data.message || data.error || "Login failed");
+      }
+    } catch (err) {
+      setStatus("Login error: " + err.message);
+    }
+  }
+
+  // V2 Auth: Register
+  async function handleV2Register() {
+    if (!email || !password) {
+      setStatus("Enter email and password");
+      return;
+    }
+    setStatus("Registering...");
+    try {
+      const res = await fetch(`${serverUrl}/api/v2/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, role: "customer" })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setStatus("Registered! Please log in.");
+      } else {
+        setStatus(data.message || data.error || "Registration failed");
+      }
+    } catch (err) {
+      setStatus("Registration error: " + err.message);
+    }
+  }
+
+  // V2 Auth: Refresh token
+  async function refreshAccessToken() {
+    if (!refreshToken) return false;
+    try {
+      const res = await fetch(`${serverUrl}/api/v2/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken })
+      });
+      const data = await res.json();
+      if (res.ok && data.accessToken) {
+        setAccessToken(data.accessToken);
+        setRefreshToken(data.refreshToken);
+        return true;
+      }
+    } catch (err) {
+      console.error("Token refresh failed:", err);
+    }
+    return false;
+  }
+
   async function startTracking() {
     if (!serverUrl || !orderId) return;
     setStatus("Connecting...");
 
     try {
-      const authRes = await fetch(`${serverUrl}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "customer", orderId })
-      });
-      const auth = await authRes.json();
-      if (!auth.token) {
-        setStatus("Auth failed");
-        return;
+      let wsToken;
+
+      if (authMode === "v2" && accessToken) {
+        // Use JWT for WebSocket (pass as query param)
+        wsToken = accessToken;
+      } else {
+        // Demo auth flow
+        const authRes = await fetch(`${serverUrl}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: "customer", orderId })
+        });
+        const auth = await authRes.json();
+        if (!auth.token) {
+          setStatus("Auth failed");
+          return;
+        }
+        wsToken = auth.token;
       }
 
-      const wsUrl = serverUrl.replace(/^http/, "ws") + `/?token=${auth.token}`;
+      if (socketRef.current) socketRef.current.close();
+      if (etaTimerRef.current) clearInterval(etaTimerRef.current);
+
+      const wsUrl = serverUrl.replace(/^http/, "ws") + `/?token=${wsToken}`;
       socketRef.current = new WebSocket(wsUrl);
 
       socketRef.current.onopen = () => setStatus("Connected");
       socketRef.current.onerror = () => setStatus("Connection error");
 
       socketRef.current.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
+        let msg;
+        try {
+          msg = JSON.parse(event.data);
+        } catch (err) {
+          console.error("WS message parse error:", err);
+          return;
+        }
         if (msg.type === "init") {
-          const order = msg.data.orders.find(o => o.id === orderId);
+          const order = (msg.data.orders || []).find(o => o.id === orderId);
           if (order) {
             setOrderStatus(order.status || "unknown");
             updateMarkers(order, msg.data);
@@ -94,9 +199,10 @@ function CustomerApp() {
         }
       };
 
-      // ETA polling
-      setInterval(async () => {
-        const res = await fetch(`${serverUrl}/api/orders/eta?orderId=${orderId}`);
+      // ETA polling with auth header for v2
+      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      etaTimerRef.current = setInterval(async () => {
+        const res = await fetch(`${serverUrl}/api/orders/eta?orderId=${orderId}`, { headers });
         if (!res.ok) return;
         const data = await res.json();
         if (data && data.etaSeconds) {
@@ -114,6 +220,44 @@ function CustomerApp() {
       <div className="panel">
         <h2>Customer</h2>
         <div className="small">Track your order in real time.</div>
+
+        {/* Auth Mode Toggle */}
+        <div className="label">Auth Mode</div>
+        <div style={{ marginBottom: 10 }}>
+          <button
+            onClick={() => setAuthMode("demo")}
+            style={{ opacity: authMode === "demo" ? 1 : 0.5 }}
+          >
+            Demo
+          </button>
+          <button
+            onClick={() => setAuthMode("v2")}
+            style={{ opacity: authMode === "v2" ? 1 : 0.5, marginLeft: 5 }}
+          >
+            V2 (JWT)
+          </button>
+        </div>
+
+        {/* V2 Auth Section */}
+        {authMode === "v2" && (
+          <div style={{ marginBottom: 10, padding: 10, background: "#f5f5f5", borderRadius: 4 }}>
+            {user ? (
+              <div>Logged in as: <strong>{user.email}</strong></div>
+            ) : (
+              <>
+                <div className="label">Email</div>
+                <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" />
+                <div className="label">Password</div>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="password" />
+                <div style={{ marginTop: 5 }}>
+                  <button onClick={handleV2Login}>Login</button>
+                  <button onClick={handleV2Register} style={{ marginLeft: 5 }}>Register</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         <div className="label">Server URL</div>
         <input value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} />
         <div className="label">Order ID</div>

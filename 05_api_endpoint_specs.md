@@ -1,5 +1,7 @@
 # API Endpoint Specifications
 
+> **Status:** 🔶 PARTIAL — Core demo server implements some endpoints. Full spec not yet built.
+
 ## Orders
 POST /api/orders
 - Create new order

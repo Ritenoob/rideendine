@@ -1,5 +1,7 @@
 # Database Schema (Chefs, Orders, Payments, Payouts)
 
+> **Status:** ⚠️ PLANNED — Schema defined but not implemented. No database layer exists yet.
+
 ## Core Tables
 
 ### Chefs

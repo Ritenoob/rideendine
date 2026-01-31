@@ -1,0 +1,292 @@
+/**
+ * Search Screen - Search for chefs and dishes
+ */
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { ChefCard } from '@/components/chef';
+import { api, location } from '@/services';
+
+interface Chef {
+  id: string;
+  businessName: string;
+  cuisineTypes: string[];
+  profileImageUrl?: string;
+  rating: number;
+  reviewCount: number;
+  averagePrepTime: number;
+  minimumOrder: number;
+  deliveryRadius: number;
+  distance?: number;
+}
+
+const POPULAR_SEARCHES = [
+  'Italian',
+  'Homemade Pasta',
+  'BBQ',
+  'Vegan',
+  'Indian Curry',
+  'Mexican Tacos',
+];
+
+export default function SearchScreen() {
+  const navigation = useNavigation<any>();
+
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Chef[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const handleSearch = useCallback(async (searchQuery: string) => {
+    if (!searchQuery.trim()) {
+      setResults([]);
+      setHasSearched(false);
+      return;
+    }
+
+    setLoading(true);
+    setHasSearched(true);
+
+    try {
+      const userLocation = await location.getCurrentLocation();
+      const coords = userLocation?.coords || { lat: 43.2207, lng: -79.7651 };
+
+      const allChefs = await api.searchChefs({
+        lat: coords.lat,
+        lng: coords.lng,
+        radius: 25,
+      });
+
+      // Filter by search query (business name or cuisine)
+      const filtered = allChefs.filter(
+        (chef: Chef) =>
+          chef.businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          chef.cuisineTypes.some((c: string) =>
+            c.toLowerCase().includes(searchQuery.toLowerCase())
+          )
+      );
+
+      setResults(filtered);
+    } catch (error) {
+      console.error('Search failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleChefPress = (chef: Chef) => {
+    navigation.navigate('ChefDetail', { chefId: chef.id });
+  };
+
+  const renderSearchBar = () => (
+    <View style={styles.searchContainer}>
+      <View style={styles.searchInputContainer}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search chefs or cuisines..."
+          placeholderTextColor="#9e9e9e"
+          value={query}
+          onChangeText={setQuery}
+          onSubmitEditing={() => handleSearch(query)}
+          returnKeyType="search"
+        />
+        {query.length > 0 && (
+          <TouchableOpacity
+            onPress={() => {
+              setQuery('');
+              setResults([]);
+              setHasSearched(false);
+            }}
+          >
+            <Text style={styles.clearIcon}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderPopularSearches = () => (
+    <View style={styles.popularSection}>
+      <Text style={styles.sectionTitle}>Popular Searches</Text>
+      <View style={styles.tagsContainer}>
+        {POPULAR_SEARCHES.map((term) => (
+          <TouchableOpacity
+            key={term}
+            style={styles.tag}
+            onPress={() => {
+              setQuery(term);
+              handleSearch(term);
+            }}
+          >
+            <Text style={styles.tagText}>{term}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderEmpty = () => (
+    <View style={styles.emptyContainer}>
+      <Text style={styles.emptyIcon}>🔍</Text>
+      <Text style={styles.emptyTitle}>No results found</Text>
+      <Text style={styles.emptyText}>
+        Try different keywords or browse by cuisine
+      </Text>
+    </View>
+  );
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#ff9800" />
+          <Text style={styles.loadingText}>Searching...</Text>
+        </View>
+      );
+    }
+
+    if (!hasSearched) {
+      return renderPopularSearches();
+    }
+
+    if (results.length === 0) {
+      return renderEmpty();
+    }
+
+    return (
+      <FlatList
+        data={results}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <ChefCard chef={item} onPress={() => handleChefPress(item)} />
+        )}
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <Text style={styles.resultsCount}>
+            {results.length} {results.length === 1 ? 'result' : 'results'} found
+          </Text>
+        }
+      />
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {renderSearchBar()}
+      {renderContent()}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f7f4ee',
+  },
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  searchIcon: {
+    fontSize: 18,
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#151515',
+  },
+  clearIcon: {
+    fontSize: 16,
+    color: '#9e9e9e',
+    padding: 4,
+  },
+  popularSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 16,
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tag: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  tagText: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    fontWeight: '500',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+  },
+  resultsCount: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    marginBottom: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#5f5f5f',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    textAlign: 'center',
+  },
+});

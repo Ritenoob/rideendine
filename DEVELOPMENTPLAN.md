@@ -1,6 +1,8 @@
 # 🏗️ RIDENDINE PRODUCTION DEVELOPMENT PLAN
 ## Full-Stack Home Kitchen Delivery Platform
 
+> **Status:** ⚠️ ASPIRATIONAL — 16-week roadmap. Currently Pre-Phase 1 (demo only). Refer to [README.md](README.md) and [AGENTS.md](AGENTS.md) for the current operational state.
+
 ---
 
 ## 📊 EXECUTIVE SUMMARY
@@ -243,7 +245,7 @@ CUSTOMER ORDERS FOOD
 
 ---
 
-#### Week 4: Order Management
+#### Week 4: Order Management (Deep Dive)
 **Goals:**
 - Order creation & lifecycle
 - Payment processing
@@ -274,9 +276,16 @@ CUSTOMER ORDERS FOOD
 - ✅ Stripe payment integration
 - ✅ Integration tests
 
+**Reality Check (Current Repo):**
+- Order tables exist in DB; no Orders API module yet.
+- Stripe service exists, but PaymentIntent/order linkage is missing.
+- Customer apps call `/api/orders/eta`, which is not implemented.
+
+**Week 4 Implementation Checklist:** see `docs/week4-6_checklist.md`
+
 ---
 
-#### Week 5: Driver & Dispatch Module
+#### Week 5: Driver & Dispatch Module (Deep Dive)
 **Goals:**
 - Driver management
 - Order assignment logic
@@ -307,9 +316,16 @@ CUSTOMER ORDERS FOOD
 - ✅ Basic dispatch algorithm
 - ✅ Location tracking
 
+**Reality Check (Current Repo):**
+- Dispatch service exists but is not integrated with API.
+- No Drivers API module yet; no GPS ingestion endpoint.
+- Routing service exists; ETA endpoint is not implemented.
+
+**Week 5 Implementation Checklist:** see `docs/week4-6_checklist.md`
+
 ---
 
-#### Week 6: Real-Time Features
+#### Week 6: Real‑Time Features (Deep Dive)
 **Goals:**
 - WebSocket service
 - Live order tracking
@@ -335,9 +351,16 @@ CUSTOMER ORDERS FOOD
    - Email notifications (SendGrid)
 
 **Deliverables:**
-- ��� Working WebSocket server
+- ✅ Working WebSocket server
 - ✅ Real-time order tracking
 - ✅ Push notification system
+
+**Reality Check (Current Repo):**
+- Realtime service is a proxy to the core demo (not API‑native).
+- No JWT‑authenticated WS implementation for API.
+- No device token storage or push integration yet.
+
+**Week 6 Implementation Checklist:** see `docs/week4-6_checklist.md`
 
 ---
 

@@ -1,0 +1,53 @@
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
+import { AppModule } from './app.module';
+import * as bodyParser from 'body-parser';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false, // Disable default body parser
+  });
+
+  // Configure raw body parser for Stripe webhooks
+  app.use(
+    '/webhooks/stripe',
+    bodyParser.raw({
+      type: 'application/json',
+      verify: (req: any, _res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
+
+  // Configure JSON body parser for all other routes
+  app.use(bodyParser.json());
+  app.use(bodyParser.urlencoded({ extended: true }));
+
+  // Global validation pipe
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
+  // CORS configuration
+  app.enableCors({
+    origin: [
+      process.env.CUSTOMER_WEB_URL || 'http://localhost:8010',
+      process.env.CHEF_DASHBOARD_URL || 'http://localhost:3001',
+      process.env.ADMIN_PANEL_URL || 'http://localhost:3002',
+      'http://localhost:8081', // Core demo
+    ],
+    credentials: true,
+  });
+
+  app.enableShutdownHooks();
+
+  const port = process.env.API_PORT || 9001;
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 API Service running on http://localhost:${port}`);
+}
+
+bootstrap();

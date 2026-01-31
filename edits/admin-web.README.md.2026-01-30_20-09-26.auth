@@ -1,0 +1,13 @@
+# Admin Web (Prototype)
+
+Static React-in-the-browser admin panel prototype for Phase 4.
+
+## Run
+```bash
+python3 -m http.server 3002 --directory apps/admin-web
+```
+Open `http://localhost:3002`.
+
+## Notes
+- Uses mock data only.
+- Intended to be wired to the API service later.

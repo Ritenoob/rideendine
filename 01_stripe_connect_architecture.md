@@ -1,5 +1,7 @@
 # Stripe Connect Architecture (Marketplace Payment System)
 
+> **Status:** ⚠️ PLANNED — This document describes intended architecture. Not yet implemented.
+
 ## Goal
 Implement a marketplace payments flow where:
 

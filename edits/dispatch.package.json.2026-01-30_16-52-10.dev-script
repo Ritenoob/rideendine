@@ -1,0 +1,10 @@
+{
+  "name": "@ridendine/dispatch-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RideNDine Dispatch Service",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

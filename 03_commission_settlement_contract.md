@@ -1,5 +1,7 @@
 # Commission + Settlement Contract Structure
 
+> **Status:** ⚠️ PLANNED — Business rules defined. Not yet implemented in code.
+
 ## Parties
 - Platform Operator (“Company”)
 - Independent Home Cook (“Chef Partner”)

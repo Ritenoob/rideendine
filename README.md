@@ -1,6 +1,6 @@
 # RideNDine
 
-RideNDine is a multi-role delivery platform demo with live routing, dispatch, pricing, reliability scoring, and customer tracking. This repo contains the V2 live routing demo plus scaffolded backend service split and customer apps (web + mobile).
+RideNDine is a multi-role delivery platform demo with live routing, dispatch, pricing, reliability scoring, and customer tracking. This repo contains the V2 live routing demo, a partial backend service split, and working customer app prototypes (web + mobile). This README and AGENTS.md are the operational sources of truth; planning docs are aspirational unless marked current.
 
 ---
 
@@ -16,6 +16,7 @@ RideNDine is a multi-role delivery platform demo with live routing, dispatch, pr
 - Configuration
 - Demo Flows
 - Troubleshooting
+- Project Documentation
 - Roadmap
 - License
 
@@ -38,8 +39,17 @@ The demo is intentionally production-shaped: auth scoping, GPS ingestion, routin
 - Dispatch engine + reliability scoring
 - Pricing + density controls
 - Alerts + summary metrics dashboard
-- Customer web + mobile scaffolds
-- Service-split architecture scaffolding
+- Customer web + mobile prototypes
+- Service-split architecture (in progress)
+
+## Status at a Glance
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Core demo server + UI | Working | Use for end-to-end flows |
+| Customer web (React) | Working prototype | Static host via python http.server |
+| Customer mobile (Expo) | Working prototype | Requires LAN IP to reach core demo |
+| Service split (api/dispatch/routing/realtime) | Prototypes, not integrated | API is NestJS WIP + stub; others are Node prototypes |
+| Database | Empty | docker-compose exists, no schema/migrations applied |
 
 ---
 
@@ -59,12 +69,12 @@ All services in one Node server.
    └─ websocket realtime
 ```
 
-### 2) Split Services (Scaffolded)
-Each domain can scale independently. (Stubs provided)
+### 2) Split Services (In Progress)
+Each domain can scale independently. Services are prototypes and not wired into the demo. The API folder contains a NestJS WIP plus a demo stub.
 
 ```
 services/
-  api/       core REST + auth
+  api/       core REST + auth (NestJS project + demo stub)
   dispatch/  assignment + batching
   routing/   routing providers + ETA
   realtime/  websocket gateway
@@ -117,17 +127,21 @@ In Expo Go, use:
 Deep link example:
 - `ridendine://track?orderId=YOUR_ORDER_ID`
 
+## Other Demos
+- Legacy static tracker: `apps/customer-web/index.html`
+- Legacy demo: `ridendine_demo/index.html`
+
 ---
 
-## Service Split (Scaffold)
-The repo includes service scaffolds for production scale:
+## Service Split (In Progress)
+The repo includes service scaffolds and an API project for production scale (not integrated into the core demo):
 
-- API: `services/api/server.js`
+- API: `services/api/` (NestJS project) and `services/api/server.js` (demo health stub)
 - Dispatch: `services/dispatch/server.js`
 - Routing: `services/routing/server.js`
 - Realtime: `services/realtime/server.js`
 
-These are stubs or proxies and can be wired into a full production architecture behind a gateway.
+These are not fully integrated. Use the core demo for end-to-end flows.
 
 ---
 
@@ -135,6 +149,7 @@ These are stubs or proxies and can be wired into a full production architecture 
 Default ports:
 
 - Core demo server: **8081**
+- API (demo stub): **9001**
 - Dispatch (scaffold): **9002**
 - Routing (scaffold): **9003**
 - Realtime (gateway scaffold): **9004**
@@ -185,6 +200,32 @@ If a port is busy, update the UI input fields or change the server `PORT` consta
 **Mobile cannot connect**
 - Use your computer’s LAN IP, not localhost
 - Ensure firewall allows port 8081
+
+---
+
+## Project Documentation
+
+For detailed documentation, see:
+
+- **[AGENTS.md](AGENTS.md)** — Agent roles, skills, implementation status, run commands
+- **[agents/CLAUDE.md](agents/CLAUDE.md)** — Project context, conventions, development phases
+- **[docs/architecture-overview.md](docs/architecture-overview.md)** — Current vs target architecture, boundaries, data flows
+- **[docs/project-setup-plan.md](docs/project-setup-plan.md)** — Realistic MVP timeline and quality gates
+- **[docs/repository-structure.md](docs/repository-structure.md)** — Proposed structure and operational considerations
+- **[DEVELOPMENTPLAN.md](DEVELOPMENTPLAN.md)** — Full 16-week production roadmap
+
+## Database
+- No schema applied; database is empty. docker-compose exists but is not seeded.
+
+### File Edit Convention
+
+Before modifying any file, archive the current version:
+
+```bash
+cp file.js "edits/file.js.$(date +%Y-%m-%d_%H-%M-%S).reason"
+```
+
+Archived versions are stored in the `edits/` directory.
 
 ---
 

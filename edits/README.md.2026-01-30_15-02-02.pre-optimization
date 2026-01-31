@@ -1,0 +1,201 @@
+# RideNDine
+
+RideNDine is a multi-role delivery platform demo with live routing, dispatch, pricing, reliability scoring, and customer tracking. This repo contains the V2 live routing demo plus scaffolded backend service split and customer apps (web + mobile).
+
+---
+
+## Table of Contents
+- Overview
+- Features
+- Architecture
+- Quick Start (Core Demo)
+- Customer Web (React)
+- Customer Mobile (Expo)
+- Service Split (Scaffold)
+- Ports & Services
+- Configuration
+- Demo Flows
+- Troubleshooting
+- Roadmap
+- License
+
+---
+
+## Overview
+RideNDine models a real-time delivery marketplace with three roles:
+- **Dispatch**: routing, batching, assignment
+- **Driver**: GPS + delivery execution
+- **Customer**: live tracking + ETA + order status
+
+The demo is intentionally production-shaped: auth scoping, GPS ingestion, routing providers, ETA, batching, pricing, reliability scoring, and alerts are already wired in the core server.
+
+---
+
+## Features
+- Live driver GPS feed (WebSocket)
+- Customer tracking (ETA + status timeline)
+- Server-side batching + route ordering
+- Dispatch engine + reliability scoring
+- Pricing + density controls
+- Alerts + summary metrics dashboard
+- Customer web + mobile scaffolds
+- Service-split architecture scaffolding
+
+---
+
+## Architecture
+There are two modes:
+
+### 1) Single-Core Demo (Default)
+All services in one Node server.
+
+```
+[ridendine_v2_live_routing/server.js]
+   ├─ auth
+   ├─ GPS ingestion
+   ├─ routing proxy
+   ├─ dispatch + batching
+   ├─ pricing + reliability
+   └─ websocket realtime
+```
+
+### 2) Split Services (Scaffolded)
+Each domain can scale independently. (Stubs provided)
+
+```
+services/
+  api/       core REST + auth
+  dispatch/  assignment + batching
+  routing/   routing providers + ETA
+  realtime/  websocket gateway
+```
+
+---
+
+## Quick Start (Core Demo)
+Run the core demo server:
+
+```
+nohup node ridendine_v2_live_routing/server.js >/tmp/ridendine_core.log 2>&1 &
+```
+
+Open the demo UI:
+- `ridendine_v2_live_routing/index.html`
+
+Default server port: **8081** (see UI input fields).
+
+---
+
+## Customer Web (React)
+Start a static server:
+
+```
+python3 -m http.server 8010 --directory apps/customer-web-react
+```
+
+Open:
+- `http://localhost:8010`
+
+Enter:
+- Server URL: `http://localhost:8081`
+- Order ID: copy from the dispatch demo dropdown
+
+---
+
+## Customer Mobile (Expo)
+From `apps/customer-mobile`:
+
+```
+npm install
+npx expo start
+```
+
+In Expo Go, use:
+- Server URL: `http://<your-computer-ip>:8081`
+- Order ID from the dispatch demo
+
+Deep link example:
+- `ridendine://track?orderId=YOUR_ORDER_ID`
+
+---
+
+## Service Split (Scaffold)
+The repo includes service scaffolds for production scale:
+
+- API: `services/api/server.js`
+- Dispatch: `services/dispatch/server.js`
+- Routing: `services/routing/server.js`
+- Realtime: `services/realtime/server.js`
+
+These are stubs or proxies and can be wired into a full production architecture behind a gateway.
+
+---
+
+## Ports & Services
+Default ports:
+
+- Core demo server: **8081**
+- Dispatch (scaffold): **9002**
+- Routing (scaffold): **9003**
+- Realtime (gateway scaffold): **9004**
+- Customer web dev server: **8010**
+- Expo bundler: **8082**
+
+If a port is busy, update the UI input fields or change the server `PORT` constant.
+
+---
+
+## Configuration
+### Core demo server
+- Map providers configured via env vars:
+  - `MAPBOX_TOKEN`
+  - `GOOGLE_MAPS_API_KEY`
+  - `OSRM_BASE_URL` (optional)
+
+### Demo UI inputs
+- Routing Server URL
+- Dispatch Server URL
+- Realtime Server URL
+
+---
+
+## Demo Flows
+### Dispatch flow
+1) Start core server
+2) Open `ridendine_v2_live_routing/index.html`
+3) Click **Run Live Dispatch**
+4) Click **Run Assignments** to reassign drivers
+
+### Customer flow
+1) Select an order from dispatch view dropdown
+2) Copy order ID into the customer app
+3) Track ETA + status + driver position
+
+---
+
+## Troubleshooting
+**Nothing happens after clicking “Run Live Dispatch”**
+- Confirm core server is running on the port shown in UI
+- Check `/tmp/ridendine_core.log`
+
+**WebSocket invalid frame header**
+- Ensure the core server is the only process on that port
+- Restart the server
+
+**Mobile cannot connect**
+- Use your computer’s LAN IP, not localhost
+- Ensure firewall allows port 8081
+
+---
+
+## Roadmap
+- Split services behind a gateway
+- Postgres schema + migrations
+- JWT auth + refresh tokens
+- Redis/NATS for realtime scaling
+- Driver app (web + mobile)
+
+---
+
+## License
+Proprietary / internal demo.

@@ -1,0 +1,54 @@
+# Architecture Overview
+
+**Status:** Mixed (Current + Planned)  
+**Last updated:** 2026-01-30
+
+## Vision
+RideNDine is a multi-role delivery platform connecting customers, home chefs, and drivers. The architecture is designed to evolve from a working single-server demo into a service-oriented platform with independent scaling, stronger security boundaries, and production-grade observability.
+
+## Current State (Working Demo)
+The default experience is a single-server demo that combines:
+- Auth and role scoping
+- GPS ingestion and driver simulation
+- Dispatch and batching logic
+- Routing provider integration
+- WebSocket realtime updates
+
+Core server and UI:
+- Core server: `ridendine_v2_live_routing/server.js`
+- Demo UI: `ridendine_v2_live_routing/index.html`
+
+## In-Progress Service Split
+The repository includes service scaffolds and a NestJS API project. These are **not fully integrated** yet.
+
+Services:
+- **API** (`services/api/`): NestJS project with auth/user foundations (work in progress).
+- **Dispatch** (`services/dispatch/server.js`): Assignment logic prototype.
+- **Routing** (`services/routing/server.js`): Provider abstraction (OSRM/Mapbox/Google).
+- **Realtime** (`services/realtime/server.js`): WebSocket proxy to the core demo server.
+
+## Target Architecture (Planned)
+- API Gateway / Load Balancer in front of services
+- Service isolation for API, dispatch, routing, and realtime
+- Shared contracts and typed events
+- Dedicated data layer (Postgres + Redis)
+
+See [docs/repository-structure.md](docs/repository-structure.md) and [09_backend_architecture.md](09_backend_architecture.md) for the planned structure and service responsibilities.
+
+## Data Flow (Current vs Planned)
+- **Current:** Core demo handles end-to-end order lifecycle in one process.
+- **Planned:** API manages order lifecycle, dispatch assigns drivers, routing calculates ETA, realtime streams updates.
+
+## Security & Compliance Posture
+- **Current:** Demo-grade auth tokens and in-memory state.
+- **Planned:** JWT + refresh tokens, role-based access control, rate limiting, audit logging, and compliance reviews (PCI-DSS/GDPR).
+
+## Observability & Operations
+- **Current:** Local logs for demo server.
+- **Planned:** Structured logging, metrics, tracing, dashboards, and alerting across services.
+
+## Documentation Map
+- [README.md](README.md) — Quick start and demo usage
+- [docs/project-setup-plan.md](docs/project-setup-plan.md) — MVP timeline and quality gates
+- [docs/repository-structure.md](docs/repository-structure.md) — Proposed structure and ops considerations
+- [DEVELOPMENTPLAN.md](DEVELOPMENTPLAN.md) — Long-term roadmap

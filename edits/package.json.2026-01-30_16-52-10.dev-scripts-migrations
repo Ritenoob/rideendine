@@ -1,0 +1,49 @@
+{
+  "name": "@ridendine/monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm:dev:*\"",
+    "dev:api": "cd services/api && npm run start:dev",
+    "dev:dispatch": "cd services/dispatch && npm run dev",
+    "dev:routing": "cd services/routing && npm run dev",
+    "dev:realtime": "cd services/realtime && npm run dev",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "eslint . --ext .ts,.js",
+    "format": "prettier --write \"**/*.{ts,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,json,md}\"",
+    "db:up": "docker-compose up -d postgres redis",
+    "db:down": "docker-compose down",
+    "db:migrate": "psql postgresql://ridendine:ridendine_dev_password@localhost:5432/ridendine_dev -f database/migrations/001_initial_schema.sql",
+    "db:seed": "psql postgresql://ridendine:ridendine_dev_password@localhost:5432/ridendine_dev -f database/seeds/001_test_users.sql",
+    "db:reset": "npm run db:down && npm run db:up && sleep 5 && npm run db:migrate && npm run db:seed",
+    "create-admin": "ts-node scripts/create-admin.ts",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.4",
+    "typescript": "^5.3.3"
+  },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  }
+}

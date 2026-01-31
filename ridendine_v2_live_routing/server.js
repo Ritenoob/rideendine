@@ -29,6 +29,60 @@ const LAND_BOUNDS = {
 };
 const DEMO_TOKENS = new Map();
 const DRIVER_LAST_UPDATE = new Map();
+
+// Auth service integration
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || "http://localhost:9001";
+
+function proxyToAuthService(method, authPath, body) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(authPath, AUTH_SERVICE_URL);
+    const options = {
+      hostname: url.hostname,
+      port: url.port || 9001,
+      path: url.pathname,
+      method: method,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    };
+
+    const req = http.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        try {
+          resolve({ statusCode: res.statusCode, data: JSON.parse(data) });
+        } catch (e) {
+          resolve({ statusCode: res.statusCode, data: { message: data } });
+        }
+      });
+    });
+
+    req.on("error", (e) => reject(e));
+    if (body) req.write(JSON.stringify(body));
+    req.end();
+  });
+}
+
+function handleV2Auth(req, res, authPath) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Content-Type", "application/json");
+
+    try {
+      const payload = body ? JSON.parse(body) : {};
+      const result = await proxyToAuthService(req.method, authPath, payload);
+      res.statusCode = result.statusCode;
+      res.end(JSON.stringify(result.data));
+    } catch (err) {
+      res.statusCode = 502;
+      res.end(JSON.stringify({ error: "Auth service unavailable", details: err.message }));
+    }
+  });
+}
 const DRIVER_STALE_MS = 15000;
 const DRIVER_METRICS = new Map();
 const DRIVER_SCORES = new Map();
@@ -683,9 +737,7 @@ function handleLogin(req, res) {
 }
 
 function handleMe(req, res) {
-  const url = new URL(req.url, "http://localhost");
-  const token = url.searchParams.get("token");
-  const auth = token ? DEMO_TOKENS.get(token) : null;
+  const auth = getAuthFromRequest(req);
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "application/json");
   if (!auth) {
@@ -697,10 +749,63 @@ function handleMe(req, res) {
   res.end(JSON.stringify(auth));
 }
 
+// Decode JWT payload (base64url)
+function decodeJwtPayload(token) {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = Buffer.from(payload, "base64").toString("utf8");
+    return JSON.parse(decoded);
+  } catch (e) {
+    return null;
+  }
+}
+
+// Check if JWT is expired
+function isJwtExpired(payload) {
+  if (!payload || !payload.exp) return true;
+  return Date.now() >= payload.exp * 1000;
+}
+
 function getAuthFromRequest(req) {
   const url = new URL(req.url, "http://localhost");
-  const token = url.searchParams.get("token");
-  return token ? DEMO_TOKENS.get(token) : null;
+
+  // Try query param token (demo tokens)
+  const queryToken = url.searchParams.get("token");
+  if (queryToken && DEMO_TOKENS.has(queryToken)) {
+    return { type: "demo", ...DEMO_TOKENS.get(queryToken) };
+  }
+
+  // Try Authorization header (JWT from NestJS)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const jwt = authHeader.slice(7);
+    const payload = decodeJwtPayload(jwt);
+    if (payload && !isJwtExpired(payload)) {
+      return {
+        type: "jwt",
+        role: payload.role,
+        userId: payload.sub,
+        email: payload.email,
+      };
+    }
+  }
+
+  // Fallback: try query token as JWT
+  if (queryToken) {
+    const payload = decodeJwtPayload(queryToken);
+    if (payload && !isJwtExpired(payload)) {
+      return {
+        type: "jwt",
+        role: payload.role,
+        userId: payload.sub,
+        email: payload.email,
+      };
+    }
+  }
+
+  return null;
 }
 
 function handleLocationUpdate(req, res) {
@@ -744,9 +849,9 @@ function handleLocationUpdate(req, res) {
 
     const lat = Number(payload.lat);
     const lng = Number(payload.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "lat/lng required" }));
+      res.end(JSON.stringify({ error: "Invalid coordinates: lat must be -90 to 90, lng must be -180 to 180" }));
       return;
     }
 
@@ -911,6 +1016,23 @@ const server = http.createServer((_, res) => {
   if (_.method === "POST" && _.url === "/api/auth/login") {
     handleLogin(_, res);
     return;
+  }
+
+  // V2 Auth routes - proxy to NestJS auth service
+  if (_.url.startsWith("/api/v2/auth/")) {
+    const authPath = _.url.replace("/api/v2/auth", "/auth");
+    if (_.method === "POST") {
+      handleV2Auth(_, res, authPath);
+      return;
+    }
+    if (_.method === "OPTIONS") {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
   }
 
   if (_.method === "GET" && _.url.startsWith("/api/me")) {

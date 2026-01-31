@@ -1,0 +1,215 @@
+const { useMemo, useState } = React;
+
+const mock = {
+  metrics: {
+    totalOrders: 1284,
+    activeOrders: 54,
+    chefsPending: 7,
+    driversOnline: 23,
+  },
+  chefs: [
+    { id: "chef_1", name: "Mira's Kitchen", status: "pending", city: "Hamilton", rating: 4.8 },
+    { id: "chef_2", name: "Curry House", status: "approved", city: "Toronto", rating: 4.6 },
+    { id: "chef_3", name: "Pasta Loft", status: "pending", city: "Burlington", rating: 4.2 },
+  ],
+  drivers: [
+    { id: "driver_1", name: "Alex Kim", status: "active", zone: "Hamilton", deliveries: 112 },
+    { id: "driver_2", name: "Priya N", status: "active", zone: "Toronto", deliveries: 89 },
+    { id: "driver_3", name: "Leo Park", status: "inactive", zone: "Burlington", deliveries: 44 },
+  ],
+  orders: [
+    { id: "order_1001", status: "preparing", chef: "Mira's Kitchen", customer: "Jamie L", total: 2899 },
+    { id: "order_1002", status: "ready_for_pickup", chef: "Curry House", customer: "Sam K", total: 3599 },
+    { id: "order_1003", status: "delivered", chef: "Pasta Loft", customer: "Rita S", total: 2599 },
+  ],
+};
+
+function currency(cents) {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function AdminApp() {
+  const [section, setSection] = useState("dashboard");
+  const [chefFilter, setChefFilter] = useState("all");
+  const [driverFilter, setDriverFilter] = useState("all");
+  const [orderQuery, setOrderQuery] = useState("");
+  const [chefList, setChefList] = useState(mock.chefs);
+
+  const filteredChefs = useMemo(() => {
+    if (chefFilter === "all") return chefList;
+    return chefList.filter((c) => c.status === chefFilter);
+  }, [chefFilter, chefList]);
+
+  const filteredDrivers = useMemo(() => {
+    if (driverFilter === "all") return mock.drivers;
+    return mock.drivers.filter((d) => d.status === driverFilter);
+  }, [driverFilter]);
+
+  const filteredOrders = useMemo(() => {
+    const q = orderQuery.toLowerCase();
+    return mock.orders.filter((o) =>
+      [o.id, o.chef, o.customer, o.status].some((v) => String(v).toLowerCase().includes(q))
+    );
+  }, [orderQuery]);
+
+  function updateChefStatus(id, status) {
+    setChefList((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+  }
+
+  return (
+    <>
+      <header>
+        <div>
+          <h1>RideNDine Admin</h1>
+          <div className="sub">Phase 4 prototype · approvals + operations</div>
+        </div>
+        <div className="sub">Local demo data</div>
+      </header>
+      <div className="container">
+        <nav>
+          <button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}>Dashboard</button>
+          <button className={section === "chefs" ? "active" : ""} onClick={() => setSection("chefs")}>Chef Approvals</button>
+          <button className={section === "drivers" ? "active" : ""} onClick={() => setSection("drivers")}>Driver Ops</button>
+          <button className={section === "orders" ? "active" : ""} onClick={() => setSection("orders")}>Orders</button>
+        </nav>
+        <div className="main">
+          {section === "dashboard" && (
+            <>
+              <div className="grid-3">
+                <div className="card">
+                  <div className="muted">Total Orders</div>
+                  <div className="metric">{mock.metrics.totalOrders}</div>
+                </div>
+                <div className="card">
+                  <div className="muted">Active Orders</div>
+                  <div className="metric">{mock.metrics.activeOrders}</div>
+                </div>
+                <div className="card">
+                  <div className="muted">Chefs Pending</div>
+                  <div className="metric">{mock.metrics.chefsPending}</div>
+                </div>
+              </div>
+              <div className="card">
+                <div className="muted">Live Notes</div>
+                <div className="metric" style={{ fontSize: 16, marginTop: 8 }}>
+                  Dispatch integration and realtime updates pending.
+                </div>
+              </div>
+            </>
+          )}
+
+          {section === "chefs" && (
+            <div className="card">
+              <div className="filter-row">
+                <select value={chefFilter} onChange={(e) => setChefFilter(e.target.value)}>
+                  <option value="all">All statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Chef</th>
+                    <th>City</th>
+                    <th>Rating</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredChefs.map((c) => (
+                    <tr key={c.id}>
+                      <td>{c.name}</td>
+                      <td>{c.city}</td>
+                      <td>{c.rating.toFixed(1)}</td>
+                      <td><span className={`badge ${c.status}`}>{c.status}</span></td>
+                      <td className="actions">
+                        <button className="approve" onClick={() => updateChefStatus(c.id, "approved")}>Approve</button>
+                        <button className="reject" onClick={() => updateChefStatus(c.id, "rejected")}>Reject</button>
+                        <button className="view">View</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {section === "drivers" && (
+            <div className="card">
+              <div className="filter-row">
+                <select value={driverFilter} onChange={(e) => setDriverFilter(e.target.value)}>
+                  <option value="all">All</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Driver</th>
+                    <th>Zone</th>
+                    <th>Deliveries</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDrivers.map((d) => (
+                    <tr key={d.id}>
+                      <td>{d.name}</td>
+                      <td>{d.zone}</td>
+                      <td>{d.deliveries}</td>
+                      <td><span className={`badge ${d.status === "active" ? "active" : "rejected"}`}>{d.status}</span></td>
+                      <td className="actions">
+                        <button className="view">View</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {section === "orders" && (
+            <div className="card">
+              <div className="filter-row">
+                <input
+                  value={orderQuery}
+                  onChange={(e) => setOrderQuery(e.target.value)}
+                  placeholder="Search order, chef, status"
+                />
+              </div>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Chef</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map((o) => (
+                    <tr key={o.id}>
+                      <td>{o.id}</td>
+                      <td>{o.chef}</td>
+                      <td>{o.customer}</td>
+                      <td><span className="badge pending">{o.status}</span></td>
+                      <td>{currency(o.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<AdminApp />);

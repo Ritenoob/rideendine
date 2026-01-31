@@ -1,0 +1,33 @@
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  // Global validation pipe
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
+  // CORS configuration
+  app.enableCors({
+    origin: [
+      process.env.CUSTOMER_WEB_URL || 'http://localhost:8010',
+      process.env.CHEF_DASHBOARD_URL || 'http://localhost:3001',
+      process.env.ADMIN_PANEL_URL || 'http://localhost:3002',
+      'http://localhost:8081', // Core demo
+    ],
+    credentials: true,
+  });
+
+  const port = process.env.API_PORT || 9001;
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 API Service running on http://localhost:${port}`);
+}
+
+bootstrap();

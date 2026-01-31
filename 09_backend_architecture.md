@@ -1,5 +1,9 @@
 # Backend Architecture (Service Split)
 
+> **Status:** 🔶 PARTIAL — Service scaffolds exist in `services/`. Not yet integrated or production-ready.
+**Status:** Aspirational (planning)  
+**Refer to:** [README.md](README.md) and [AGENTS.md](AGENTS.md) for current operational guidance.
+
 ## Overview
 We will split the backend into four services:
 

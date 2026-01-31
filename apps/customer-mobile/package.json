@@ -1,18 +1,38 @@
 {
-  "name": "customer-mobile",
+  "name": "@ridendine/customer-mobile",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "expo": "~54.0.32",
-    "expo-status-bar": "~3.0.9",
+    "@react-navigation/bottom-tabs": "^6.5.0",
+    "@react-navigation/native": "^6.1.0",
+    "@react-navigation/native-stack": "^6.9.0",
+    "@stripe/stripe-react-native": "^0.35.0",
+    "expo": "~54.0.0",
+    "expo-constants": "~17.0.0",
+    "expo-linking": "~7.0.0",
+    "expo-location": "~18.0.0",
+    "expo-secure-store": "~14.0.0",
+    "expo-status-bar": "~3.0.0",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-native": "0.81.5",
+    "react-native-maps": "^1.10.0",
+    "react-native-safe-area-context": "^4.8.0",
+    "react-native-screens": "~4.4.0",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@types/react": "^18.2.0",
+    "babel-plugin-module-resolver": "^5.0.0",
+    "typescript": "^5.3.0"
   },
   "private": true
 }

@@ -1,5 +1,7 @@
 # Webhook Event Architecture
 
+> **Status:** ⚠️ PLANNED — Webhook events defined. Not yet implemented.
+
 ## Incoming Webhooks (from COOCO)
 POST /webhooks/cooco/delivery-status
 

@@ -1,0 +1,11 @@
+{
+  "name": "@ridendine/routing-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RideNDine Routing Service",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  }
+}

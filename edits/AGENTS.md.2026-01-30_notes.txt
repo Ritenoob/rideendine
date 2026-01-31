@@ -1,0 +1,30 @@
+AGENTS.md Optimization Notes
+Date: 2026-01-30
+Author: Claude
+
+CHANGES MADE:
+1. Added implementation status table showing what's working vs scaffold
+2. Fixed incorrect file paths (apps/customer-web/ doesn't exist, only customer-web-react/)
+3. Removed references to non-existent scripts (scripts/run-core.sh, etc.)
+4. Added actual run commands for each component
+5. Added port 9004 for realtime gateway (was missing)
+6. Added line counts for key files to show implementation depth
+7. Made skills more actionable with actual bash commands
+8. Added environment variables section
+9. Added quick start commands
+10. Clarified what's NOT implemented (database, api-client SDK)
+11. Removed duplication with README.md
+12. Added API endpoints for core server
+
+ISSUES FIXED:
+- apps/customer-web/index.html referenced but doesn't exist
+- scripts/run-*.sh referenced but don't exist
+- services/shared/contracts.js listed as major but only 12 lines
+- No distinction between working code and empty scaffolds
+- Missing port 9004 for realtime service
+
+STRUCTURE CHANGES:
+- Replaced verbose prose with scannable tables
+- Grouped related info (status, ports, commands together)
+- Added code blocks for actual commands
+- Removed MCP Servers section (empty/not useful)

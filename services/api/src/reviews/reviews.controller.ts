@@ -133,7 +133,7 @@ export class ReviewsController {
   @Get('stats/:revieweeId')
   async getRatingStats(
     @Param('revieweeId', ParseUUIDPipe) revieweeId: string,
-    @Query('type') revieweeType: RevieweeType,
+    @Query('revieweeType') revieweeType: RevieweeType,
   ): Promise<RatingStatsResponse> {
     return this.reviewsService.getRatingStats(revieweeId, revieweeType);
   }

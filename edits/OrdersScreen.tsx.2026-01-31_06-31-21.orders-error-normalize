@@ -18,38 +18,32 @@ import type { RootStackParamList } from '@/navigation/types';
 import { Card } from '@/components/ui';
 import { OrderStatusTimeline } from '@/components/order';
 import { api } from '@/services';
-import { normalizeOrder, NormalizedOrder } from '@/utils/order';
 
-const extractOrders = (payload: unknown): unknown[] => {
-  if (Array.isArray(payload)) return payload;
-  if (payload && typeof payload === 'object') {
-    const record = payload as { data?: unknown; orders?: unknown };
-    if (Array.isArray(record.data)) return record.data;
-    if (Array.isArray(record.orders)) return record.orders;
-  }
-  return [];
-};
+interface Order {
+  id: string;
+  chefId: string;
+  chefName?: string;
+  status: string;
+  total: number;
+  itemCount?: number;
+  createdAt: string;
+}
 
 export default function OrdersScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const [activeOrders, setActiveOrders] = useState<NormalizedOrder[]>([]);
-  const [pastOrders, setPastOrders] = useState<NormalizedOrder[]>([]);
+  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
+  const [pastOrders, setPastOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'past'>('active');
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchOrders = useCallback(async (showLoader = false) => {
-    if (showLoader) {
-      setLoading(true);
-    }
-    setError(null);
+  const fetchOrders = useCallback(async () => {
     try {
       const response = await api.getOrders({ limit: 50 });
-      const orders = extractOrders(response).map((order) => normalizeOrder(order));
+      const orders = response.data || [];
 
-      const active = orders.filter((o) =>
+      const active = orders.filter((o: Order) =>
         [
           'pending',
           'payment_pending',
@@ -63,19 +57,14 @@ export default function OrdersScreen() {
         ].includes(o.status),
       );
 
-      const past = orders.filter((o) =>
+      const past = orders.filter((o: Order) =>
         ['delivered', 'cancelled', 'refunded', 'rejected'].includes(o.status),
       );
 
       setActiveOrders(active);
       setPastOrders(past);
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to load orders. Please try again.';
+    } catch (error) {
       console.error('Failed to fetch orders:', error);
-      setActiveOrders([]);
-      setPastOrders([]);
-      setError(message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -84,7 +73,7 @@ export default function OrdersScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchOrders(true);
+      fetchOrders();
     }, [fetchOrders]),
   );
 
@@ -93,7 +82,7 @@ export default function OrdersScreen() {
     fetchOrders();
   };
 
-  const handleOrderPress = (order: NormalizedOrder) => {
+  const handleOrderPress = (order: Order) => {
     if (activeTab === 'active') {
       navigation.navigate('OrderTracking', { orderId: order.id });
     } else {
@@ -113,7 +102,7 @@ export default function OrdersScreen() {
     });
   };
 
-  const renderOrderCard = ({ item }: { item: NormalizedOrder }) => (
+  const renderOrderCard = ({ item }: { item: Order }) => (
     <Card style={styles.orderCard} onPress={() => handleOrderPress(item)}>
       <View style={styles.orderHeader}>
         <Text style={styles.orderChef}>{item.chefName || 'Chef'}</Text>
@@ -132,17 +121,6 @@ export default function OrdersScreen() {
         )}
       </View>
     </Card>
-  );
-
-  const renderError = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>⚠️</Text>
-      <Text style={styles.emptyTitle}>Couldn&apos;t load orders</Text>
-      <Text style={styles.emptyText}>{error}</Text>
-      <TouchableOpacity style={styles.retryButton} onPress={() => fetchOrders(true)}>
-        <Text style={styles.retryButtonText}>Try again</Text>
-      </TouchableOpacity>
-    </View>
   );
 
   const renderEmpty = () => (
@@ -200,7 +178,7 @@ export default function OrdersScreen() {
         data={orders}
         keyExtractor={(item) => item.id}
         renderItem={renderOrderCard}
-        ListEmptyComponent={error ? renderError : renderEmpty}
+        ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ff9800" />
@@ -323,17 +301,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#5f5f5f',
     textAlign: 'center',
-  },
-  retryButton: {
-    marginTop: 16,
-    backgroundColor: '#ff9800',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 999,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

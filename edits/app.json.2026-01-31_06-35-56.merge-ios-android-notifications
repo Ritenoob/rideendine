@@ -12,25 +12,6 @@
         }
       ]
     ],
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
-    "ios": {
-      "bundleIdentifier": "com.ridendine.customer",
-      "associatedDomains": [],
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "We need your location to find chefs near you and enable delivery tracking.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location to provide accurate delivery tracking and find nearby chefs."
-      }
-    },
     "android": {
       "intentFilters": [
         {
@@ -44,7 +25,30 @@
           ],
           "category": ["BROWSABLE", "DEFAULT"]
         }
-      ],
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.ridendine.customer",
+      "associatedDomains": [],
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to find chefs near you and enable delivery tracking.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location to provide accurate delivery tracking and find nearby chefs."
+      }
+    },
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -52,8 +56,7 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "POST_NOTIFICATIONS"
+        "ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {

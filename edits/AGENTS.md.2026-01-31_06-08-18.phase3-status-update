@@ -13,7 +13,7 @@ Primary operational sources: this file and [README.md](README.md). Planning docs
 | Core Demo Server | **Working** | 8081 | `node ridendine_v2_live_routing/server.js` |
 | Demo UI | **Working** | — | Open `ridendine_v2_live_routing/index.html` |
 | Customer Web (React) | **Working prototype** | 8010 | `python3 -m http.server 8010 --directory apps/customer-web-react` |
-| Customer Mobile (Expo) | **Working prototype (Week 7–8 buildout)** | 8082 | `cd apps/customer-mobile && npx expo start` |
+| Customer Mobile (Expo) | **Working prototype** | 8082 | `cd apps/customer-mobile && npx expo start` |
 | Dispatch Service | Prototype (not integrated) | 9002 | `node services/dispatch/server.js` |
 | Routing Service | Prototype (not integrated) | 9003 | `node services/routing/server.js` |
 | Realtime Gateway | Prototype (not integrated) | 9004 | `node services/realtime/server.js` |
@@ -92,14 +92,12 @@ docs/                         # Architecture/plan documents (mix of current + as
 | App | Entry | Features |
 |-----|-------|----------|
 | Web React | `app.js` (131 lines) | Leaflet map, ETA polling, status timeline |
-| Mobile Expo | `App.tsx` + `src/` | Navigation + location, favorites/reviews, saved addresses/payment methods, cart/checkout polish, Stripe Payment Sheet wiring |
+| Mobile Expo | `App.js` (264 lines) | React Native Maps, deep linking |
 
 **Dependencies:** Requires core server on 8081 (mobile needs LAN IP)
 
 **Responsibilities:**
 - Map + ETA + status timeline
-- Checkout flow (tips, promo codes, summary) + Stripe Payment Sheet
-- Favorites + reviews + saved addresses/payment methods
 - WebSocket reconnection logic
 - Deep link handling (`ridendine://track?orderId=...`)
 

@@ -26,7 +26,7 @@ export class UsersService {
       email: user.email,
       role: user.role,
       isVerified: user.is_verified,
-      stripe_customer_id: user.stripe_customer_id,
+      stripeCustomerId: user.stripe_customer_id,
       createdAt: user.created_at,
       profile: {
         firstName: user.first_name,

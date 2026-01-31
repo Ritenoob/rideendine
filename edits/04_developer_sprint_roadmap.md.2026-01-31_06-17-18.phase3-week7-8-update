@@ -1,9 +1,9 @@
 # Developer Task Roadmap (Sprint Plan)
 
-> **Status:** ✅ COMPLETE (Phase 2) — Backend API fully implemented. Frontend in progress (Phase 3 Week 8).
+> **Status:** ✅ COMPLETE (Phase 2) — Backend API fully implemented. Frontend in progress (Phase 3 Week 7).
 
 **Last Updated:** 2026-01-31  
-**Current Sprint:** Phase 3 Week 8 (Customer Mobile App)
+**Current Sprint:** Phase 3 Week 7 (Customer Mobile App)
 
 ---
 
@@ -178,32 +178,33 @@ total = subtotal + tax + deliveryFee
 ## Sprint 6 — Frontend Apps 🔄 IN PROGRESS
 
 **Duration:** Weeks 7-10 (Phase 3)  
-**Status:** 🔄 Week 8 in progress
+**Status:** 🔄 Week 7 Day 1 complete
 
-### Week 7: Customer Discovery (Complete)
+### Week 7: Customer Discovery (35% Complete)
 **Goal:** Customer can browse chefs and view menus
 
-#### Completed (Days 1-3)
+#### Completed (Day 1)
 - ✅ Navigation structure (RootNavigator, MainTabNavigator)
 - ✅ Location permissions configured
 - ✅ API service connected to core server (8081)
-- ✅ HomeScreen chef discovery + filters + pull-to-refresh
-- ✅ ChefDetailScreen API integration + menu + reviews
+- ✅ HomeScreen with chef discovery logic
+- ✅ Environment variables setup (.env)
 
-### Week 8: Ordering & Payment (In Progress)
+#### In Progress (Days 2-3)
+- 🔄 Test on device/simulator
+- 🔄 Chef discovery UI enhancements
+- 🔄 ChefDetailScreen API integration
+- 🔄 Menu browsing functionality
+
+### Week 8: Ordering & Payment (Not Started)
 **Goal:** Customer can complete purchase
 
-#### Completed (Days 4-6)
-- ✅ Cart management (quantity, remove, totals)
-- ✅ Checkout flow with saved addresses + tips + promo codes
-- ✅ Stripe Payment Sheet integration (customerless)
-- ✅ Order confirmation wiring
-
-#### Pending (Day 7)
-- ⏳ Order history screen (OrdersScreen)
-- ⏳ Order detail + tracking screens
-- ⏳ Push notification setup (Expo)
-- ⏳ Device/simulator testing + polish
+#### Planned Features
+- Cart management
+- Checkout flow
+- Stripe Payment Sheet integration
+- Order confirmation
+- Order history
 
 ### Week 9: Chef Dashboard (Not Started)
 **Goal:** Chef can manage operations via web
@@ -271,9 +272,9 @@ total = subtotal + tax + deliveryFee
 - Driver dispatch: GPS tracking + assignment
 
 ### 🔄 In Progress (Phase 3)
-- Customer Mobile: Week 8 in progress (ordering flow + Stripe done)
-- Order history + tracking + push notifications pending
-- Device/simulator testing pending
+- Customer Mobile: Week 7 Day 1 complete
+- Navigation + location permissions configured
+- API integration in progress
 
 ### ⏳ Upcoming (Phases 4-6)
 - Complete frontend apps (3 more weeks)
@@ -293,18 +294,18 @@ total = subtotal + tax + deliveryFee
 - 12-state order machine ✅
 
 **Frontend Progress:**
-- Customer Mobile: 55% complete
+- Customer Mobile: 35% complete
 - Chef Dashboard: 0% (starts Week 9)
 - Driver Mobile: 0% (starts Week 10)
 
 **Overall Project:**
-- **~51% complete** (8.2/16 weeks equivalent)
+- **37.5% complete** (6/16 weeks)
 - Phase 1-2: 100% ✅
-- Phase 3: 55% 🔄
+- Phase 3: 35% 🔄
 - Phases 4-6: 0% ⏳
 
 ---
 
-**Next Sprint:** Phase 3 Week 8 Day 7 (Order history + tracking + testing)  
+**Next Sprint:** Phase 3 Week 7 Days 2-3 (Customer app testing + chef detail screen)  
 **Blockers:** None  
 **On Track:** Yes

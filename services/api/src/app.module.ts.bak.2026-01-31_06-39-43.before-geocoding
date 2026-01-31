@@ -1,5 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { ChefsModule } from './chefs/chefs.module';
+import { MenusModule } from './menus/menus.module';
+import { OrdersModule } from './orders/orders.module';
+import { AdminModule } from './admin/admin.module';
 import { DatabaseModule } from './database/database.module';
 import { StripeModule } from './stripe/stripe.module';
 import { HealthController } from './common/health.controller';
@@ -8,15 +15,6 @@ import { DriversModule } from './drivers/drivers.module';
 import { DispatchModule } from './dispatch/dispatch.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { GeocodingModule } from './geocoding/geocoding.module';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
-import { ChefsModule } from './chefs/chefs.module';
-import { MenusModule } from './menus/menus.module';
-import { OrdersModule } from './orders/orders.module';
-import { AdminModule } from './admin/admin.module';
-import { ThrottlerModule } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard } from '@nestjs/throttler';
 
 @Module({
   imports: [
@@ -26,8 +24,8 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     }),
     ThrottlerModule.forRoot([
       {
-        ttl: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'), // 1 minute default
-        limit: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // 100 requests per minute default
+        ttl: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
+        limit: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
       },
     ]),
     DatabaseModule,
@@ -45,11 +43,5 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     GeocodingModule,
   ],
   controllers: [HealthController],
-  providers: [
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard, // Apply rate limiting globally
-    },
-  ],
 })
 export class AppModule {}

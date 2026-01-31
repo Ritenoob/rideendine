@@ -94,9 +94,6 @@ class WebSocketService {
       case 'init':
         this.handleInit(data);
         break;
-      case 'locations':
-        this.handleLocations(data);
-        break;
       case 'order_update':
         this.handleOrderUpdate(data);
         break;
@@ -122,64 +119,13 @@ class WebSocketService {
   }
 
   private handleInit(data: any) {
-    const store = useOrderStore.getState();
-    const activeOrder = store.activeOrder;
-    const orders = Array.isArray(data.orders) ? data.orders : [];
-    const drivers = Array.isArray(data.drivers) ? data.drivers : [];
-
-    if (activeOrder) {
-      const order = orders.find((item: any) => item.id === activeOrder.id);
-      if (order?.status) {
-        store.updateOrderStatus(order.status);
-      }
-
-      const driverId = order?.driverId || activeOrder.driverId;
-      const driver = drivers.find((item: any) => item.id === driverId);
-      if (driver) {
-        store.setDriverLocation({
-          lat: driver.lat,
-          lng: driver.lng,
-          heading: driver.heading,
-        });
-      }
-      return;
+    if (data.orders?.length) {
+      const order = data.orders[0];
+      useOrderStore.getState().updateOrderStatus(order.status);
     }
-
-    if (orders.length) {
-      const order = orders[0];
-      if (order?.status) {
-        store.updateOrderStatus(order.status);
-      }
-    }
-    if (drivers.length) {
-      const driver = drivers[0];
-      store.setDriverLocation({
-        lat: driver.lat,
-        lng: driver.lng,
-        heading: driver.heading,
-      });
-    }
-  }
-
-  private handleLocations(data: any) {
-    const store = useOrderStore.getState();
-    const activeOrder = store.activeOrder;
-    if (!activeOrder) {
-      return;
-    }
-
-    const orders = Array.isArray(data.orders) ? data.orders : [];
-    const drivers = Array.isArray(data.drivers) ? data.drivers : [];
-    const order = orders.find((item: any) => item.id === activeOrder.id);
-
-    if (order?.status) {
-      store.updateOrderStatus(order.status);
-    }
-
-    const driverId = order?.driverId || activeOrder.driverId;
-    const driver = drivers.find((item: any) => item.id === driverId);
-    if (driver) {
-      store.setDriverLocation({
+    if (data.drivers?.length) {
+      const driver = data.drivers[0];
+      useOrderStore.getState().setDriverLocation({
         lat: driver.lat,
         lng: driver.lng,
         heading: driver.heading,

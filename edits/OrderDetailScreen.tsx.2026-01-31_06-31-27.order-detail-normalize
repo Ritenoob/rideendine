@@ -1,8 +1,8 @@
 /**
  * Order Detail Screen - Past order details
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,49 +10,55 @@ import type { RootStackParamList } from '@/navigation/types';
 import { Card, Button } from '@/components/ui';
 import { OrderStatusTimeline } from '@/components/order';
 import { api } from '@/services';
-import { normalizeOrder, NormalizedOrder } from '@/utils/order';
+
+interface Order {
+  id: string;
+  chefId: string;
+  chefName?: string;
+  status: string;
+  items: Array<{
+    id: string;
+    name: string;
+    price: number;
+    quantity: number;
+  }>;
+  subtotal: number;
+  deliveryFee: number;
+  serviceFee: number;
+  tax: number;
+  tip: number;
+  total: number;
+  deliveryAddress: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
+  createdAt: string;
+}
 
 export default function OrderDetailScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'OrderDetail'>>();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { orderId } = route.params;
 
-  const [order, setOrder] = useState<NormalizedOrder | null>(null);
+  const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchOrder = useCallback(
-    async (showLoader = false) => {
-      if (showLoader) {
-        setLoading(true);
-      }
-      setError(null);
-      try {
-        const data = await api.getOrder(orderId);
-        setOrder(normalizeOrder(data));
-      } catch (error: unknown) {
-        const message =
-          error instanceof Error ? error.message : 'Failed to load order. Please try again.';
-        console.error('Failed to fetch order:', error);
-        setOrder(null);
-        setError(message);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [orderId],
-  );
 
   useEffect(() => {
-    fetchOrder(true);
-  }, [fetchOrder]);
+    const fetchOrder = async () => {
+      try {
+        const data = await api.getOrder(orderId);
+        setOrder(data);
+      } catch (error) {
+        console.error('Failed to fetch order:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const handleRefresh = () => {
-    setRefreshing(true);
     fetchOrder();
-  };
+  }, [orderId]);
 
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
@@ -79,20 +85,13 @@ export default function OrderDetailScreen() {
   if (!order) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error || 'Order not found'}</Text>
-        <Button title="Try Again" onPress={() => fetchOrder(true)} size="medium" />
+        <Text style={styles.errorText}>Order not found</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ff9800" />
-      }
-    >
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Order Status */}
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Order Status</Text>
@@ -105,35 +104,25 @@ export default function OrderDetailScreen() {
         <Text style={styles.sectionTitle}>Items</Text>
         <Text style={styles.chefName}>{order.chefName || 'Chef'}</Text>
 
-        {order.items.length === 0 ? (
-          <Text style={styles.emptyItemsText}>No items found for this order.</Text>
-        ) : (
-          order.items.map((item) => (
-            <View key={item.id} style={styles.itemRow}>
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemQuantity}>{item.quantity}x</Text>
-                <Text style={styles.itemName}>{item.name}</Text>
-              </View>
-              <Text style={styles.itemPrice}>{formatCurrency(item.price * item.quantity)}</Text>
+        {order.items.map((item) => (
+          <View key={item.id} style={styles.itemRow}>
+            <View style={styles.itemInfo}>
+              <Text style={styles.itemQuantity}>{item.quantity}x</Text>
+              <Text style={styles.itemName}>{item.name}</Text>
             </View>
-          ))
-        )}
+            <Text style={styles.itemPrice}>{formatCurrency(item.price * item.quantity)}</Text>
+          </View>
+        ))}
       </Card>
 
       {/* Delivery Address */}
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Delivered To</Text>
-        {order.deliveryAddress.street ? (
-          <>
-            <Text style={styles.addressText}>{order.deliveryAddress.street}</Text>
-            <Text style={styles.addressText}>
-              {order.deliveryAddress.city}, {order.deliveryAddress.state}{' '}
-              {order.deliveryAddress.zipCode}
-            </Text>
-          </>
-        ) : (
-          <Text style={styles.addressTextMuted}>Address unavailable</Text>
-        )}
+        <Text style={styles.addressText}>{order.deliveryAddress.street}</Text>
+        <Text style={styles.addressText}>
+          {order.deliveryAddress.city}, {order.deliveryAddress.state}{' '}
+          {order.deliveryAddress.zipCode}
+        </Text>
       </Card>
 
       {/* Payment Summary */}
@@ -206,13 +195,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    gap: 12,
   },
   errorText: {
     fontSize: 16,
     color: '#9e9e9e',
-    textAlign: 'center',
   },
   card: {
     marginBottom: 16,
@@ -262,18 +248,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#151515',
   },
-  emptyItemsText: {
-    fontSize: 14,
-    color: '#9e9e9e',
-  },
   addressText: {
     fontSize: 15,
     color: '#151515',
     marginBottom: 4,
-  },
-  addressTextMuted: {
-    fontSize: 14,
-    color: '#9e9e9e',
   },
   summaryRow: {
     flexDirection: 'row',

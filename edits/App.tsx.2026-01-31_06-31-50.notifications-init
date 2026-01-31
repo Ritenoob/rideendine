@@ -1,37 +1,15 @@
 /**
  * RideNDine Customer Mobile App
  */
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { RootNavigator } from '@/navigation';
-import {
-  configureNotifications,
-  registerForPushNotificationsAsync,
-  addNotificationListeners,
-} from '@/services';
 
 export default function App() {
   const publishableKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
-
-  useEffect(() => {
-    configureNotifications();
-    const removeListeners = addNotificationListeners();
-
-    registerForPushNotificationsAsync()
-      .then((token) => {
-        if (token) {
-          console.log('Expo push token:', token);
-        }
-      })
-      .catch((error) => {
-        console.warn('Push notification setup failed:', error);
-      });
-
-    return removeListeners;
-  }, []);
 
   return (
     <SafeAreaProvider>

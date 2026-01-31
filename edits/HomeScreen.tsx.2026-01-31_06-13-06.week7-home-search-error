@@ -12,13 +12,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CompositeNavigationProp, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import type { MainTabParamList, RootStackParamList } from '@/navigation/types';
+import type { RootStackParamList } from '@/navigation/types';
 import { ChefCard } from '@/components/chef';
 import { api, location } from '@/services';
-import { useAuthStore, useCartStore, useFavoritesStore } from '@/store';
+import { useAuthStore, useCartStore } from '@/store';
 
 interface Chef {
   id: string;
@@ -44,13 +43,8 @@ const CUISINE_FILTERS = [
   'Thai',
 ];
 
-type HomeNavigationProp = CompositeNavigationProp<
-  BottomTabNavigationProp<MainTabParamList, 'Home'>,
-  NativeStackNavigationProp<RootStackParamList>
->;
-
 export default function HomeScreen() {
-  const navigation = useNavigation<HomeNavigationProp>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const user = useAuthStore((state) => state.user);
   const cartItemCount = useCartStore((state) => state.itemCount);
   const loadFavorites = useFavoritesStore((state) => state.loadFavorites);
@@ -59,14 +53,12 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCuisine, setSelectedCuisine] = useState('All');
-  const [error, setError] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{
     lat: number;
     lng: number;
   } | null>(null);
 
   const fetchChefs = useCallback(async () => {
-    setError(null);
     try {
       const coords = userLocation || { lat: 43.2207, lng: -79.7651 }; // Default to Hamilton, ON
 
@@ -85,8 +77,6 @@ export default function HomeScreen() {
       setChefs(result);
     } catch (error) {
       console.error('Failed to fetch chefs:', error);
-      setChefs([]);
-      setError('Unable to load chefs right now.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -138,13 +128,6 @@ export default function HomeScreen() {
     </View>
   );
 
-  const renderSearchBar = () => (
-    <TouchableOpacity style={styles.searchBar} onPress={() => navigation.navigate('Search')}>
-      <Text style={styles.searchIcon}>🔍</Text>
-      <Text style={styles.searchPlaceholder}>Search chefs, cuisines, or dishes</Text>
-    </TouchableOpacity>
-  );
-
   const renderFilters = () => (
     <View style={styles.filtersContainer}>
       <FlatList
@@ -169,17 +152,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
       />
-    </View>
-  );
-
-  const renderError = () => (
-    <View style={styles.errorContainer}>
-      <Text style={styles.errorIcon}>⚠️</Text>
-      <Text style={styles.errorTitle}>Couldn&apos;t load chefs</Text>
-      <Text style={styles.errorText}>Check your connection and try again.</Text>
-      <TouchableOpacity style={styles.retryButton} onPress={fetchChefs}>
-        <Text style={styles.retryButtonText}>Try again</Text>
-      </TouchableOpacity>
     </View>
   );
 
@@ -212,14 +184,13 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <>
             {renderHeader()}
-            {renderSearchBar()}
             {renderFilters()}
             <Text style={styles.sectionTitle}>
               {selectedCuisine === 'All' ? 'Nearby Chefs' : `${selectedCuisine} Chefs`}
             </Text>
           </>
         }
-        ListEmptyComponent={error ? renderError : renderEmpty}
+        ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ff9800" />
@@ -275,26 +246,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 11,
     fontWeight: '700',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e5e1da',
-  },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 10,
-  },
-  searchPlaceholder: {
-    fontSize: 14,
-    color: '#9e9e9e',
   },
   filtersContainer: {
     marginBottom: 16,
@@ -363,36 +314,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#5f5f5f',
     textAlign: 'center',
-  },
-  errorContainer: {
-    alignItems: 'center',
-    paddingVertical: 48,
-  },
-  errorIcon: {
-    fontSize: 36,
-    marginBottom: 12,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#151515',
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#5f5f5f',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  retryButton: {
-    backgroundColor: '#ff9800',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 999,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

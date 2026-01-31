@@ -616,9 +616,22 @@ export class ReviewsService {
       [revieweeId, revieweeType],
     );
 
-    const rating = parseFloat(avgResult.rows[0]?.rating) || 0;
-    const reviewCount = parseInt(avgResult.rows[0]?.count) || 0;
+    let rating = 0;
+    let reviewCount = 0;
 
+    if (avgResult.rows.length > 0) {
+      const row = avgResult.rows[0];
+
+      if (row?.rating !== null && row.rating !== undefined) {
+        const parsedRating = parseFloat(row.rating);
+        rating = Number.isNaN(parsedRating) ? 0 : parsedRating;
+      }
+
+      if (row?.count !== null && row.count !== undefined) {
+        const parsedCount = parseInt(row.count, 10);
+        reviewCount = Number.isNaN(parsedCount) ? 0 : parsedCount;
+      }
+    }
     if (revieweeType === 'chef') {
       await this.db.query(
         'UPDATE chefs SET rating = $1, review_count = $2 WHERE user_id = $3',

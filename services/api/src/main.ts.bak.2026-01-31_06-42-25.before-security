@@ -51,7 +51,7 @@ async function bootstrap() {
   );
 
   // CORS configuration
-  const allowedOrigins: (string | RegExp)[] = [
+  const allowedOrigins = [
     process.env.CUSTOMER_WEB_URL || 'http://localhost:8010',
     process.env.CHEF_DASHBOARD_URL || 'http://localhost:3001',
     process.env.ADMIN_PANEL_URL || 'http://localhost:3002',

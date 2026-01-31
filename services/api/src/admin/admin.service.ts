@@ -441,34 +441,34 @@ export class AdminService {
 
       // Update user_profiles table if first_name, last_name, or phone changed
       const profileUpdates: string[] = [];
-      const profileValues: string[] = [];
-      let profileParamIndex = 1;
 
       if (data.first_name !== undefined) {
-        profileUpdates.push(`first_name = $${profileParamIndex++}`);
-        profileValues.push(data.first_name);
+        // On update, use the value from the INSERT (EXCLUDED)
+        profileUpdates.push('first_name = EXCLUDED.first_name');
       }
       if (data.last_name !== undefined) {
-        profileUpdates.push(`last_name = $${profileParamIndex++}`);
-        profileValues.push(data.last_name);
+        profileUpdates.push('last_name = EXCLUDED.last_name');
       }
       if (data.phone !== undefined) {
-        profileUpdates.push(`phone = $${profileParamIndex++}`);
-        profileValues.push(data.phone);
+        profileUpdates.push('phone = EXCLUDED.phone');
       }
 
       if (profileUpdates.length > 0) {
-        profileUpdates.push(`updated_at = NOW()`);
-        profileValues.push(userId);
+        profileUpdates.push('updated_at = NOW()');
 
         // Upsert: update if exists, insert if not
         await client.query(
           `
           INSERT INTO user_profiles (user_id, first_name, last_name, phone, updated_at)
-          VALUES ($${profileParamIndex}, $1, $2, $3, NOW())
+          VALUES ($1, $2, $3, $4, NOW())
           ON CONFLICT (user_id) DO UPDATE SET ${profileUpdates.join(', ')}
         `,
-          [...profileValues.slice(0, -1), userId, ...profileValues.slice(0, -1)],
+          [
+            userId,
+            data.first_name ?? null,
+            data.last_name ?? null,
+            data.phone ?? null,
+          ],
         );
       }
 

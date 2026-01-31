@@ -4,8 +4,3 @@
 export { api } from './api';
 export { websocket } from './websocket';
 export { location } from './location';
-export {
-  configureNotifications,
-  registerForPushNotificationsAsync,
-  addNotificationListeners,
-} from './notifications';

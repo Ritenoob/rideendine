@@ -97,6 +97,10 @@ open ridendine_v2_live_routing/index.html  # Port 8081
 - `001_initial_schema.sql` - Core tables (users, chefs, menus, orders, payments)
 - `002_chef_enhancements.sql` - Minimum order, delivery radius, operating hours, promo codes, tips
 - `003_admin_actions.sql` - Admin audit log table
+- `004_orders_enhancements.sql` - Order lifecycle timestamps, rejection/cancellation reasons, chef earnings
+- `005_drivers.sql` - Driver management, GPS tracking, vehicle info, performance metrics
+- `006_phase4_admin_reviews.sql` - Reviews, admin settings, platform configuration
+- `006_platform_settings.sql` - Platform-wide settings and feature flags
 
 **Connection String:** `postgresql://ridendine:ridendine_dev_password@localhost:5432/ridendine_dev`
 
@@ -114,12 +118,17 @@ open ridendine_v2_live_routing/index.html  # Port 8081
 
 ```
 services/api/src/
-├── auth/               # JWT authentication, role guards
+├── auth/               # JWT authentication, role guards, rate limiting
 ├── users/              # User CRUD
 ├── chefs/              # Chef application, profiles, search
 ├── menus/              # Menu and item management
 ├── orders/             # Order creation, state machine, queries
+├── drivers/            # Driver management, GPS tracking
+├── dispatch/           # Assignment logic, batching
 ├── stripe/             # Stripe Connect integration + webhooks
+├── geocoding/          # Address validation, Google Maps integration
+├── reviews/            # Chef/driver reviews and ratings
+├── realtime/           # WebSocket gateway for live updates
 ├── admin/              # Admin verification, audit logs
 ├── common/             # Shared guards, decorators, filters
 ├── config/             # Environment configuration
@@ -131,6 +140,14 @@ services/api/src/
 - `StripeModule` is global (used by chefs and orders)
 - `AuthModule` provides guards used across all protected routes
 - `ConfigModule` is global, loads from `.env`
+- `GeocodingModule` provides address validation for orders
+
+**Security Features (main.ts):**
+- **Helmet**: Security headers (CSP, HSTS, X-Frame-Options)
+- **CORS**: Configurable cross-origin requests
+- **Rate Limiting**: Global throttling (100 req/min per IP)
+- **Auth Throttling**: Stricter limits on auth endpoints (10 req/min)
+- **Request Size Limits**: 10MB max body size
 
 ---
 
@@ -281,6 +298,39 @@ await this.db.query(
 
 Includes: who, what, when, target, and JSONB details for context.
 
+### Geocoding Integration
+
+Address validation using Google Maps Geocoding API in `GeocodingService`:
+
+```typescript
+// Validate and geocode delivery address
+const result = await geocodingService.geocodeAddress(address);
+// Returns: { lat, lng, formattedAddress, placeId }
+```
+
+**Used by:**
+- Order creation: Validate delivery addresses before accepting orders
+- Chef search: Calculate distances from customer to available chefs
+
+**Configuration:**
+- Set `GOOGLE_MAPS_API_KEY` in `.env`
+- Enable Geocoding API in Google Cloud Console
+
+### Reviews and Ratings
+
+Review system in `reviews/` module:
+
+**Features:**
+- Customers can review chefs and drivers after order delivery
+- 1-5 star rating with optional text review
+- One review per order per target (chef or driver)
+- Average ratings calculated and cached
+
+**Endpoints:**
+- `POST /reviews` - Create review (requires delivered order)
+- `GET /reviews/chef/:id` - Get chef reviews
+- `GET /reviews/driver/:id` - Get driver reviews
+
 ---
 
 ## Development Phases
@@ -295,18 +345,22 @@ From `DEVELOPMENTPLAN.md` (16-week roadmap):
 |   Week 4: Orders Module | 4 | 🔄 23% complete (2/9 endpoints) |
 |   Week 5: Driver & Dispatch | 5 | Not started |
 |   Week 6: Real-Time Features | 6 | Not started |
-| **Phase 3:** Frontend Apps | 7-10 | Prototypes exist |
-| **Phase 4:** Admin & Reviews | 11-12 | Not started |
-| **Phase 5:** Testing & Security | 13-14 | Not started |
+| **Phase 3:** Frontend Apps | 7-10 | **Week 7-8 in progress** |
+|   Week 7: Customer Mobile Core | 7 | ✅ Complete (notifications, deep linking) |
+|   Week 8: Customer Mobile Polish | 8 | 🔄 In progress (real-time tracking) |
+| **Phase 4:** Admin & Reviews | 11-12 | Reviews complete, Admin started |
+| **Phase 5:** Testing & Security | 13-14 | Security hardening started |
 | **Phase 6:** Launch Prep | 15-16 | Not started |
 
-**Current Focus:** Week 4 - Order Management
-- ✅ Order creation with validation
-- ✅ State machine (12 states)
-- ✅ Commission calculator
-- 🔄 Payment intent creation (in progress)
-- 🔄 Order state transitions (in progress)
-- 🔄 Refund processing (in progress)
+**Current Focus:** Phase 3 Week 8 - Customer Mobile Polish
+- ✅ Push notifications (Expo Notifications)
+- ✅ Deep linking (ridendine://track?orderId=...)
+- ✅ Error handling and loading states
+- ✅ Security hardening (Helmet, rate limiting, CORS)
+- ✅ Geocoding service integration
+- ✅ Reviews and ratings module
+- 🔄 Real-time WebSocket tracking improvements
+- 🔄 Order state visualization enhancements
 
 ---
 
@@ -338,10 +392,17 @@ STRIPE_CONNECT_REFRESH_URL=http://localhost:9001/api/stripe/connect/refresh
 UPLOAD_MAX_FILE_SIZE=5242880  # 5MB
 UPLOAD_ALLOWED_MIMETYPES=image/jpeg,image/png,application/pdf
 
+# Google Maps (for geocoding and routing)
+GOOGLE_MAPS_API_KEY=AIza...
+
 # Core Demo (optional, for backward compatibility)
 MAPBOX_TOKEN=pk.ey...
-GOOGLE_MAPS_API_KEY=AIza...
 OSRM_BASE_URL=http://router.project-osrm.org
+
+# Security (optional, defaults provided)
+RATE_LIMIT_TTL=60000          # 60 seconds
+RATE_LIMIT_MAX=100            # 100 requests per TTL
+CORS_ORIGIN=http://localhost:3000,http://localhost:8010
 ```
 
 ---
@@ -381,6 +442,16 @@ OSRM_BASE_URL=http://router.project-osrm.org
 - `services/api/src/admin/admin.service.ts` - Verification + audit logging
 - `scripts/create-admin.ts` - CLI tool for creating admin users
 
+**Security & Infrastructure:**
+- `services/api/src/main.ts` - Security middleware (Helmet, rate limiting, CORS)
+- `services/api/src/geocoding/geocoding.service.ts` - Address validation
+- `services/api/src/reviews/reviews.service.ts` - Reviews and ratings
+
+**Customer Mobile App:**
+- `apps/customer-mobile/src/App.tsx` - Navigation and notifications setup
+- `apps/customer-mobile/src/services/notifications.ts` - Push notification service
+- `apps/customer-mobile/src/screens/order/OrderTrackingScreen.tsx` - Real-time tracking UI
+
 **Core Demo:**
 - `ridendine_v2_live_routing/server.js` - Complete working demo (1050 lines)
 - `ridendine_v2_live_routing/index.html` - Dispatch UI (1062 lines)
@@ -390,7 +461,9 @@ OSRM_BASE_URL=http://router.project-osrm.org
 **Sources of Truth (aligned with code):**
 - `README.md` - Operational guide
 - `AGENTS.md` - Agent roles and skills
-- `PHASE2_WEEK3_PROGRESS_FINAL.md` - Week 3 completion summary
+- `CLAUDE.md` - Claude Code configuration
+- `PHASE3_STATUS.md` - Phase 3 progress tracking
+- `FRONTEND_BUILD_STATUS.md` - Frontend implementation status
 
 **Aspirational (planning only):**
 - `DEVELOPMENTPLAN.md` - 16-week roadmap
@@ -514,12 +587,31 @@ npx tsc --noEmit
 # Get LAN IP
 hostname -I | awk '{print $1}'
 
-# Update server URL in apps/customer-mobile/App.js to http://<LAN_IP>:8081
+# Update server URL in apps/customer-mobile/src/services/websocket.ts
+# Update API_BASE_URL to http://<LAN_IP>:8081
+
 # Allow port through firewall
 sudo ufw allow 8081
 
 # Verify core server is reachable from device
 curl http://<LAN_IP>:8081/health
+
+# Run Expo diagnostics
+cd apps/customer-mobile && npx expo-doctor
+```
+
+### Rate Limiting Issues
+
+If getting 429 (Too Many Requests) errors:
+
+```bash
+# Check rate limit configuration in services/api/src/main.ts
+# Default: 100 requests per minute globally
+# Auth endpoints: 10 requests per minute
+
+# Adjust in .env:
+RATE_LIMIT_TTL=60000  # Time window in ms
+RATE_LIMIT_MAX=100    # Max requests per window
 ```
 
 ---

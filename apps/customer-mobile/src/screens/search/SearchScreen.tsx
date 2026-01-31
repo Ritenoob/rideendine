@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@/navigation/types';
 import { ChefCard } from '@/components/chef';
 import { api, location } from '@/services';
 
@@ -39,7 +41,7 @@ const POPULAR_SEARCHES = [
 ];
 
 export default function SearchScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Chef[]>([]);
@@ -71,8 +73,8 @@ export default function SearchScreen() {
         (chef: Chef) =>
           chef.businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
           chef.cuisineTypes.some((c: string) =>
-            c.toLowerCase().includes(searchQuery.toLowerCase())
-          )
+            c.toLowerCase().includes(searchQuery.toLowerCase()),
+          ),
       );
 
       setResults(filtered);
@@ -139,9 +141,7 @@ export default function SearchScreen() {
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyIcon}>🔍</Text>
       <Text style={styles.emptyTitle}>No results found</Text>
-      <Text style={styles.emptyText}>
-        Try different keywords or browse by cuisine
-      </Text>
+      <Text style={styles.emptyText}>Try different keywords or browse by cuisine</Text>
     </View>
   );
 
@@ -167,9 +167,7 @@ export default function SearchScreen() {
       <FlatList
         data={results}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <ChefCard chef={item} onPress={() => handleChefPress(item)} />
-        )}
+        renderItem={({ item }) => <ChefCard chef={item} onPress={() => handleChefPress(item)} />}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <Text style={styles.resultsCount}>

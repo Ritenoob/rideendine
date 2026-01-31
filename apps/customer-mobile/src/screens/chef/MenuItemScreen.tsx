@@ -12,12 +12,15 @@ import {
   TextInput,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@/navigation/types';
 import { Button } from '@/components/ui';
 import { useCartStore } from '@/store';
 
 export default function MenuItemScreen() {
-  const navigation = useNavigation();
-  const route = useRoute<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'MenuItem'>>();
   const { item, chef } = route.params;
 
   const { setChef, addItem } = useCartStore();
@@ -71,9 +74,7 @@ export default function MenuItemScreen() {
           <Text style={styles.name}>{item.name}</Text>
           <Text style={styles.price}>{formatCurrency(item.price)}</Text>
 
-          {item.description && (
-            <Text style={styles.description}>{item.description}</Text>
-          )}
+          {item.description && <Text style={styles.description}>{item.description}</Text>}
 
           {/* Dietary Badges */}
           {getDietaryBadges().length > 0 && (
@@ -91,9 +92,7 @@ export default function MenuItemScreen() {
           {item.spiceLevel > 0 && (
             <View style={styles.spiceLevel}>
               <Text style={styles.spiceLabel}>Spice Level:</Text>
-              <Text style={styles.spiceValue}>
-                {'🌶️'.repeat(item.spiceLevel)}
-              </Text>
+              <Text style={styles.spiceValue}>{'🌶️'.repeat(item.spiceLevel)}</Text>
             </View>
           )}
 
@@ -101,18 +100,14 @@ export default function MenuItemScreen() {
           {item.allergens && item.allergens.length > 0 && (
             <View style={styles.allergens}>
               <Text style={styles.allergensLabel}>Contains:</Text>
-              <Text style={styles.allergensList}>
-                {item.allergens.join(', ')}
-              </Text>
+              <Text style={styles.allergensList}>{item.allergens.join(', ')}</Text>
             </View>
           )}
 
           {/* Prep Time */}
           <View style={styles.prepTime}>
             <Text style={styles.prepTimeIcon}>⏱️</Text>
-            <Text style={styles.prepTimeText}>
-              {item.preparationTime} min prep time
-            </Text>
+            <Text style={styles.prepTimeText}>{item.preparationTime} min prep time</Text>
           </View>
 
           {/* Quantity Selector */}

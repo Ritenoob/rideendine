@@ -60,11 +60,7 @@ export default function OrderStatusTimeline({
               </View>
               {index < STATUS_STEPS.length - 1 && (
                 <View
-                  style={[
-                    styles.line,
-                    isDone && styles.lineDone,
-                    isFuture && styles.lineFuture,
-                  ]}
+                  style={[styles.line, isDone && styles.lineDone, isFuture && styles.lineFuture]}
                 />
               )}
             </View>

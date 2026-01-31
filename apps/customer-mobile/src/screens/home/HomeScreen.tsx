@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@/navigation/types';
 import { ChefCard } from '@/components/chef';
 import { api, location } from '@/services';
 import { useAuthStore, useCartStore } from '@/store';
@@ -42,9 +44,10 @@ const CUISINE_FILTERS = [
 ];
 
 export default function HomeScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const user = useAuthStore((state) => state.user);
   const cartItemCount = useCartStore((state) => state.itemCount);
+  const loadFavorites = useFavoritesStore((state) => state.loadFavorites);
 
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +62,7 @@ export default function HomeScreen() {
     try {
       const coords = userLocation || { lat: 43.2207, lng: -79.7651 }; // Default to Hamilton, ON
 
-      const params: any = {
+      const params: Parameters<typeof api.searchChefs>[0] = {
         lat: coords.lat,
         lng: coords.lng,
         radius: 15,
@@ -91,6 +94,10 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
+    loadFavorites();
+  }, [loadFavorites]);
+
+  useEffect(() => {
     fetchChefs();
   }, [fetchChefs]);
 
@@ -106,17 +113,12 @@ export default function HomeScreen() {
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={styles.greeting}>
-        <Text style={styles.greetingText}>
-          Hello, {user?.firstName || 'foodie'}! 👋
-        </Text>
+        <Text style={styles.greetingText}>Hello, {user?.firstName || 'foodie'}! 👋</Text>
         <Text style={styles.greetingSubtext}>What are you craving today?</Text>
       </View>
 
       {cartItemCount > 0 && (
-        <TouchableOpacity
-          style={styles.cartButton}
-          onPress={() => navigation.navigate('Cart')}
-        >
+        <TouchableOpacity style={styles.cartButton} onPress={() => navigation.navigate('Cart')}>
           <Text style={styles.cartIcon}>🛒</Text>
           <View style={styles.cartBadge}>
             <Text style={styles.cartBadgeText}>{cartItemCount}</Text>
@@ -136,10 +138,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.filters}
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={[
-              styles.filterChip,
-              selectedCuisine === item && styles.filterChipActive,
-            ]}
+            style={[styles.filterChip, selectedCuisine === item && styles.filterChipActive]}
             onPress={() => setSelectedCuisine(item)}
           >
             <Text
@@ -160,9 +159,7 @@ export default function HomeScreen() {
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyIcon}>🍽️</Text>
       <Text style={styles.emptyTitle}>No chefs found</Text>
-      <Text style={styles.emptyText}>
-        Try expanding your search radius or changing filters
-      </Text>
+      <Text style={styles.emptyText}>Try expanding your search radius or changing filters</Text>
     </View>
   );
 
@@ -183,9 +180,7 @@ export default function HomeScreen() {
       <FlatList
         data={chefs}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <ChefCard chef={item} onPress={() => handleChefPress(item)} />
-        )}
+        renderItem={({ item }) => <ChefCard chef={item} onPress={() => handleChefPress(item)} />}
         ListHeaderComponent={
           <>
             {renderHeader()}
@@ -198,11 +193,7 @@ export default function HomeScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#ff9800"
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ff9800" />
         }
       />
     </SafeAreaView>

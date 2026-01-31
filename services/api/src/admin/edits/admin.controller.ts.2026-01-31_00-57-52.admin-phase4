@@ -1,0 +1,185 @@
+import {
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Delete,
+  Query,
+  Body,
+  UseGuards,
+} from '@nestjs/common';
+import { AdminService } from './admin.service';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { UserRole } from '../common/interfaces/user.interface';
+import {
+  UsersQueryDto,
+  UpdateUserDto,
+  ChefsQueryDto,
+  RejectChefDto,
+  DriversQueryDto,
+  RejectDriverDto,
+  OrdersQueryDto,
+  RefundOrderDto,
+  CommissionQueryDto,
+  PayoutsQueryDto,
+  ReviewsQueryDto,
+  RemoveReviewDto,
+  UpdateSettingsDto,
+} from './dto/admin.dto';
+
+@Controller('admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
+export class AdminController {
+  constructor(private readonly adminService: AdminService) {}
+
+  // ===========================================================================
+  // Dashboard
+  // ===========================================================================
+
+  @Get('dashboard/stats')
+  async getDashboardStats() {
+    return this.adminService.getDashboardStats();
+  }
+
+  @Get('dashboard/activity')
+  async getRecentActivity() {
+    return this.adminService.getRecentActivity();
+  }
+
+  // ===========================================================================
+  // User Management
+  // ===========================================================================
+
+  @Get('users')
+  async listUsers(@Query() query: UsersQueryDto) {
+    return this.adminService.listUsers({
+      role: query.role,
+      search: query.search,
+      page: query.page,
+      perPage: query.perPage,
+    });
+  }
+
+  @Patch('users/:id')
+  async updateUser(@Param('id') userId: string, @Body() body: UpdateUserDto) {
+    return this.adminService.updateUser(userId, body);
+  }
+
+  @Post('users/:id/suspend')
+  async suspendUser(@Param('id') userId: string) {
+    return this.adminService.suspendUser(userId);
+  }
+
+  // ===========================================================================
+  // Chef Management
+  // ===========================================================================
+
+  @Get('chefs')
+  async listChefs(@Query() query: ChefsQueryDto) {
+    return this.adminService.listChefs(query.status, query.search);
+  }
+
+  @Get('chefs/:id')
+  async getChefDetails(@Param('id') chefId: string) {
+    return this.adminService.getChefDetails(chefId);
+  }
+
+  @Patch('chefs/:id/approve')
+  async approveChef(@Param('id') chefId: string) {
+    return this.adminService.updateChefStatus(chefId, 'approved');
+  }
+
+  @Patch('chefs/:id/reject')
+  async rejectChef(@Param('id') chefId: string, @Body() body: RejectChefDto) {
+    return this.adminService.updateChefStatus(chefId, 'rejected', body.reason);
+  }
+
+  // ===========================================================================
+  // Driver Management
+  // ===========================================================================
+
+  @Get('drivers')
+  async listDrivers(@Query() query: DriversQueryDto) {
+    return this.adminService.listDrivers(query.status, query.search);
+  }
+
+  @Patch('drivers/:id/approve')
+  async approveDriver(@Param('id') driverId: string) {
+    return this.adminService.approveDriver(driverId);
+  }
+
+  @Patch('drivers/:id/reject')
+  async rejectDriver(@Param('id') driverId: string, @Body() body: RejectDriverDto) {
+    return this.adminService.rejectDriver(driverId, body.reason);
+  }
+
+  // ===========================================================================
+  // Order Management
+  // ===========================================================================
+
+  @Get('orders')
+  async listOrders(@Query() query: OrdersQueryDto) {
+    return this.adminService.listOrders({
+      status: query.status,
+      search: query.search,
+      page: query.page,
+      perPage: query.perPage,
+    });
+  }
+
+  @Get('orders/:id')
+  async getOrderDetails(@Param('id') orderId: string) {
+    return this.adminService.getOrderDetails(orderId);
+  }
+
+  @Post('orders/:id/refund')
+  async refundOrder(@Param('id') orderId: string, @Body() body: RefundOrderDto) {
+    return this.adminService.refundOrder(orderId, body.reason);
+  }
+
+  // ===========================================================================
+  // Commission & Analytics
+  // ===========================================================================
+
+  @Get('commission')
+  async getCommissionStats(@Query() query: CommissionQueryDto) {
+    return this.adminService.getCommissionStats(query.period);
+  }
+
+  @Get('payouts')
+  async getPayouts(@Query() query: PayoutsQueryDto) {
+    return this.adminService.getPayouts(query.status);
+  }
+
+  // ===========================================================================
+  // Reviews
+  // ===========================================================================
+
+  @Get('reviews')
+  async listReviews(@Query() query: ReviewsQueryDto) {
+    return this.adminService.listReviews(query.revieweeType, query.flagged);
+  }
+
+  @Delete('reviews/:id')
+  async removeReview(@Param('id') reviewId: string, @Body() body: RemoveReviewDto) {
+    return this.adminService.removeReview(reviewId, body.reason);
+  }
+
+  // ===========================================================================
+  // Settings
+  // ===========================================================================
+
+  @Get('settings')
+  async getSettings() {
+    return this.adminService.getSettings();
+  }
+
+  @Patch('settings')
+  async updateSettings(@Body() body: UpdateSettingsDto) {
+    return this.adminService.updateSettings(body);
+  }
+}

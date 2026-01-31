@@ -3,6 +3,15 @@
     "name": "customer-mobile",
     "slug": "customer-mobile",
     "scheme": "ridendine",
+    "plugins": [
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.ridendine",
+          "enableGooglePay": true
+        }
+      ]
+    ],
     "android": {
       "intentFilters": [
         {

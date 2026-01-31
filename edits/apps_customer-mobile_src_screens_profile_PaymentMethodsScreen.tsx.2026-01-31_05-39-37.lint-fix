@@ -1,0 +1,340 @@
+/**
+ * Payment Methods Screen - Saved payment options
+ */
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Switch,
+} from 'react-native';
+import { Button, Card, Input } from '@/components/ui';
+import { PaymentMethod, useProfileStore } from '@/store/profileStore';
+
+const emptyForm = {
+  brand: '',
+  last4: '',
+  expMonth: '',
+  expYear: '',
+  makeDefault: false,
+};
+
+export default function PaymentMethodsScreen() {
+  const {
+    paymentMethods,
+    isLoading,
+    loadProfileData,
+    addPaymentMethod,
+    updatePaymentMethod,
+    removePaymentMethod,
+    setDefaultPaymentMethod,
+  } = useProfileStore();
+
+  const [form, setForm] = useState({ ...emptyForm });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadProfileData();
+  }, [loadProfileData]);
+
+  const isEditing = Boolean(editingId);
+
+  const formTitle = useMemo(() => {
+    return isEditing ? 'Edit Payment Method' : 'Add Payment Method';
+  }, [isEditing]);
+
+  const resetForm = () => {
+    setForm({ ...emptyForm });
+    setEditingId(null);
+  };
+
+  const validateForm = () => {
+    if (!form.brand.trim()) return 'Card brand is required.';
+    if (!form.last4.trim() || form.last4.trim().length !== 4) {
+      return 'Enter the last 4 digits.';
+    }
+    const month = Number(form.expMonth);
+    if (!month || month < 1 || month > 12) return 'Enter a valid expiration month.';
+    if (!form.expYear.trim()) return 'Enter a valid expiration year.';
+    return '';
+  };
+
+  const handleSave = async () => {
+    const errorMessage = validateForm();
+    if (errorMessage) {
+      Alert.alert('Missing Details', errorMessage);
+      return;
+    }
+
+    const payload = {
+      brand: form.brand.trim(),
+      last4: form.last4.trim(),
+      expMonth: form.expMonth.trim(),
+      expYear: form.expYear.trim(),
+      isDefault: form.makeDefault,
+    };
+
+    try {
+      if (editingId) {
+        await updatePaymentMethod(editingId, payload);
+      } else {
+        await addPaymentMethod(payload);
+      }
+      resetForm();
+    } catch (error) {
+      Alert.alert('Save Failed', 'Unable to save payment method. Please try again.');
+    }
+  };
+
+  const handleEdit = (method: PaymentMethod) => {
+    setEditingId(method.id);
+    setForm({
+      brand: method.brand,
+      last4: method.last4,
+      expMonth: method.expMonth,
+      expYear: method.expYear,
+      makeDefault: method.isDefault,
+    });
+  };
+
+  const handleDelete = (method: PaymentMethod) => {
+    Alert.alert('Remove Payment Method', 'Remove this payment method?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => removePaymentMethod(method.id),
+      },
+    ]);
+  };
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Payment Methods</Text>
+        <Text style={styles.sectionSubtitle}>Cards are stored locally for demo use only.</Text>
+      </View>
+
+      {paymentMethods.length === 0 && !isLoading ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>No saved cards</Text>
+          <Text style={styles.emptyText}>Add a card below to speed up checkout.</Text>
+        </View>
+      ) : (
+        paymentMethods.map((method) => (
+          <Card key={method.id} style={styles.methodCard}>
+            <View style={styles.methodHeader}>
+              <Text style={styles.methodLabel}>{method.brand}</Text>
+              {method.isDefault && <Text style={styles.defaultBadge}>Default</Text>}
+            </View>
+            <Text style={styles.methodDetails}>**** {method.last4}</Text>
+            <Text style={styles.methodDetails}>
+              Expires {method.expMonth}/{method.expYear}
+            </Text>
+            <View style={styles.actionsRow}>
+              {!method.isDefault && (
+                <TouchableOpacity onPress={() => setDefaultPaymentMethod(method.id)}>
+                  <Text style={styles.actionLink}>Set Default</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => handleEdit(method)}>
+                <Text style={styles.actionLink}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleDelete(method)}>
+                <Text style={styles.actionLinkDanger}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
+        ))
+      )}
+
+      <Card style={styles.formCard}>
+        <Text style={styles.formTitle}>{formTitle}</Text>
+        <Input
+          label="Card Brand"
+          placeholder="Visa"
+          value={form.brand}
+          onChangeText={(value) => setForm((prev) => ({ ...prev, brand: value }))}
+        />
+        <View style={styles.row}>
+          <View style={styles.halfInput}>
+            <Input
+              label="Last 4"
+              placeholder="4242"
+              value={form.last4}
+              onChangeText={(value) => setForm((prev) => ({ ...prev, last4: value }))}
+              keyboardType="number-pad"
+              maxLength={4}
+            />
+          </View>
+          <View style={styles.halfInput}>
+            <Input
+              label="Exp Month"
+              placeholder="12"
+              value={form.expMonth}
+              onChangeText={(value) => setForm((prev) => ({ ...prev, expMonth: value }))}
+              keyboardType="number-pad"
+              maxLength={2}
+            />
+          </View>
+          <View style={styles.halfInput}>
+            <Input
+              label="Exp Year"
+              placeholder="2027"
+              value={form.expYear}
+              onChangeText={(value) => setForm((prev) => ({ ...prev, expYear: value }))}
+              keyboardType="number-pad"
+              maxLength={4}
+            />
+          </View>
+        </View>
+
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>Set as default</Text>
+          <Switch
+            value={form.makeDefault}
+            onValueChange={(value) => setForm((prev) => ({ ...prev, makeDefault: value }))}
+            trackColor={{ true: '#ff9800' }}
+          />
+        </View>
+
+        <View style={styles.formActions}>
+          {isEditing && (
+            <Button
+              title="Cancel"
+              onPress={resetForm}
+              variant="ghost"
+              style={styles.formButton}
+            />
+          )}
+          <Button
+            title={isEditing ? 'Update Card' : 'Save Card'}
+            onPress={handleSave}
+            style={styles.formButton}
+          />
+        </View>
+      </Card>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f7f4ee',
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  sectionHeader: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#151515',
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    marginTop: 4,
+  },
+  emptyState: {
+    padding: 24,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 6,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#5f5f5f',
+  },
+  methodCard: {
+    marginBottom: 12,
+  },
+  methodHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  methodLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+  },
+  methodDetails: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    marginBottom: 4,
+  },
+  defaultBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ff9800',
+    backgroundColor: '#fff3e0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 12,
+  },
+  actionLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ff9800',
+  },
+  actionLinkDanger: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#d32f2f',
+  },
+  formCard: {
+    marginTop: 8,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfInput: {
+    flex: 1,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  switchLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#151515',
+  },
+  formActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  formButton: {
+    minWidth: 140,
+  },
+});

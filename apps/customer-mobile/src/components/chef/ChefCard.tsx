@@ -3,6 +3,7 @@
  */
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { useFavoritesStore } from '@/store';
 
 interface ChefCardProps {
   chef: {
@@ -18,15 +19,23 @@ interface ChefCardProps {
     distance?: number;
   };
   onPress: () => void;
+  showFavorite?: boolean;
 }
 
-export default function ChefCard({ chef, onPress }: ChefCardProps) {
+export default function ChefCard({ chef, onPress, showFavorite = true }: ChefCardProps) {
+  const { isFavorite, toggleFavorite } = useFavoritesStore();
+  const favorite = isFavorite(chef.id);
+
   const formatCurrency = (cents: number) => {
     return `$${(cents / 100).toFixed(2)}`;
   };
 
   const formatDistance = (miles: number) => {
     return miles < 1 ? `${Math.round(miles * 5280)} ft` : `${miles.toFixed(1)} mi`;
+  };
+
+  const handleFavoritePress = () => {
+    toggleFavorite(chef);
   };
 
   return (
@@ -38,9 +47,20 @@ export default function ChefCard({ chef, onPress }: ChefCardProps) {
         style={styles.image}
       />
       <View style={styles.content}>
-        <Text style={styles.name} numberOfLines={1}>
-          {chef.businessName}
-        </Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.name} numberOfLines={1}>
+            {chef.businessName}
+          </Text>
+          {showFavorite && (
+            <TouchableOpacity
+              style={styles.favoriteButton}
+              onPress={handleFavoritePress}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.favoriteIcon}>{favorite ? '❤️' : '🤍'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <Text style={styles.cuisines} numberOfLines={1}>
           {chef.cuisineTypes.slice(0, 3).join(' • ')}
         </Text>
@@ -62,9 +82,7 @@ export default function ChefCard({ chef, onPress }: ChefCardProps) {
             </View>
           )}
         </View>
-        <Text style={styles.minimum}>
-          Min. order {formatCurrency(chef.minimumOrder)}
-        </Text>
+        <Text style={styles.minimum}>Min. order {formatCurrency(chef.minimumOrder)}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -94,11 +112,23 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     justifyContent: 'center',
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   name: {
     fontSize: 17,
     fontWeight: '700',
     color: '#151515',
-    marginBottom: 4,
+    flex: 1,
+  },
+  favoriteButton: {
+    padding: 4,
+  },
+  favoriteIcon: {
+    fontSize: 20,
   },
   cuisines: {
     fontSize: 13,

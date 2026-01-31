@@ -1,0 +1,537 @@
+/**
+ * Checkout Screen - Address entry and payment
+ */
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  TouchableOpacity,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useStripe } from '@stripe/stripe-react-native';
+import { Button, Input, Card } from '@/components/ui';
+import { OrderSummary } from '@/components/order';
+import { api, location } from '@/services';
+import { useCartStore, useOrderStore, useProfileStore } from '@/store';
+import { Address } from '@/store/profileStore';
+
+export default function CheckoutScreen() {
+  const navigation = useNavigation<any>();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const {
+    chef,
+    items,
+    tip,
+    subtotal,
+    deliveryFee,
+    serviceFee,
+    tax,
+    promoDiscount,
+    total,
+    clearCart,
+    setDeliveryAddress,
+  } = useCartStore();
+  const { setActiveOrder } = useOrderStore();
+  const {
+    addresses,
+    hasLoaded: addressesLoaded,
+    isLoading: addressesLoading,
+    loadProfileData,
+  } = useProfileStore();
+
+  const [street, setStreet] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [zipCode, setZipCode] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+
+  const [loading, setLoading] = useState(false);
+  const [initializingAddress, setInitializingAddress] = useState(true);
+  const stripePublishableKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+
+  useEffect(() => {
+    loadProfileData();
+  }, [loadProfileData]);
+
+  const applyAddress = (address: Address) => {
+    setStreet(address.street);
+    setCity(address.city);
+    setState(address.state);
+    setZipCode(address.zipCode);
+    setInstructions(address.instructions || '');
+    setCoords(null);
+  };
+
+  const persistSelectedAddress = (address: Address) => {
+    setDeliveryAddress({
+      street: address.street,
+      city: address.city,
+      state: address.state,
+      zipCode: address.zipCode,
+      instructions: address.instructions,
+    });
+  };
+
+  useEffect(() => {
+    const initAddress = async () => {
+      if (!addressesLoaded || !initializingAddress) return;
+
+      if (addresses.length > 0) {
+        const defaultAddress = addresses.find((addr) => addr.isDefault) || addresses[0];
+        applyAddress(defaultAddress);
+        setSelectedAddressId(defaultAddress.id);
+        persistSelectedAddress(defaultAddress);
+        setInitializingAddress(false);
+        return;
+      }
+
+      try {
+        const result = await location.getCurrentLocation();
+        if (result) {
+          setCoords(result.coords);
+          if (result.address) {
+            setStreet(result.address.street);
+            setCity(result.address.city);
+            setState(result.address.state);
+            setZipCode(result.address.zipCode);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to get location:', error);
+      } finally {
+        setInitializingAddress(false);
+      }
+    };
+
+    initAddress();
+  }, [addressesLoaded, addresses, initializingAddress]);
+
+  useEffect(() => {
+    if (!street.trim() && !city.trim() && !state.trim() && !zipCode.trim()) {
+      return;
+    }
+
+    setDeliveryAddress({
+      street: street.trim(),
+      city: city.trim(),
+      state: state.trim(),
+      zipCode: zipCode.trim(),
+      lat: coords?.lat,
+      lng: coords?.lng,
+      instructions: instructions.trim() || undefined,
+    });
+  }, [street, city, state, zipCode, instructions, coords, setDeliveryAddress]);
+
+  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+  const validate = () => {
+    if (!street.trim() || !city.trim() || !state.trim() || !zipCode.trim()) {
+      Alert.alert('Missing Address', 'Please fill in all address fields.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSelectAddress = (address: Address) => {
+    applyAddress(address);
+    setSelectedAddressId(address.id);
+    persistSelectedAddress(address);
+  };
+
+  const handleAddressFieldChange = (
+    setter: React.Dispatch<React.SetStateAction<string>>,
+    value: string
+  ) => {
+    if (selectedAddressId) {
+      setSelectedAddressId(null);
+    }
+    setCoords(null);
+    setter(value);
+  };
+
+  const handlePlaceOrder = async () => {
+    if (!validate() || !chef) return;
+    if (!stripePublishableKey) {
+      Alert.alert('Stripe Not Configured', 'Missing Stripe publishable key.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // 1. Get coordinates if not available
+      let orderCoords = coords;
+      if (!orderCoords) {
+        const fullAddress = `${street}, ${city}, ${state} ${zipCode}`;
+        const geocoded = await location.geocode(fullAddress);
+        if (geocoded) {
+          orderCoords = geocoded;
+        } else {
+          orderCoords = { lat: 43.2207, lng: -79.7651 }; // Default
+        }
+      }
+
+      const deliveryAddress = {
+        street: street.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        zipCode: zipCode.trim(),
+        lat: orderCoords.lat,
+        lng: orderCoords.lng,
+        instructions: instructions.trim() || undefined,
+      };
+
+      setDeliveryAddress(deliveryAddress);
+
+      // 2. Create order (status: pending)
+      const order = await api.createOrder({
+        chefId: chef.id,
+        items: items.map((item) => ({
+          menuItemId: item.menuItem.id,
+          quantity: item.quantity,
+          specialInstructions: item.specialInstructions,
+        })),
+        deliveryAddress,
+        tip,
+      });
+
+      setCurrentOrderId(order.id);
+      setOrderCreated(true);
+
+      // 3. Initialize Stripe Payment Sheet
+      const initialized = await initializePayment(order.id);
+      if (!initialized) {
+        Alert.alert('Payment Error', 'Failed to initialize payment. Please try again.');
+        return;
+      }
+
+      // 4. Present Payment Sheet
+      const result = await processPayment();
+
+      if (!result.success) {
+        if (result.error !== 'Payment cancelled') {
+          Alert.alert(
+            'Payment Failed',
+            'Your order has been created but payment failed. Please contact support.'
+          );
+        }
+        return;
+      }
+
+      // 5. Payment successful!
+      setActiveOrder({
+        ...order,
+        chefName: chef.businessName,
+      });
+
+      // Clear cart and navigate to confirmation
+      clearCart();
+      navigation.replace('OrderConfirmation', { orderId: order.id });
+    } catch (error: any) {
+      Alert.alert(
+        'Order Failed',
+        error.message || 'Failed to place order. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (initializingAddress) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ff9800" />
+        <Text style={styles.loadingText}>Preparing checkout...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Saved Addresses */}
+        <Card style={styles.card}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Saved Addresses</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Addresses')}>
+              <Text style={styles.manageLink}>Manage</Text>
+            </TouchableOpacity>
+          </View>
+
+          {addresses.length === 0 && !addressesLoading ? (
+            <View style={styles.emptySavedAddress}>
+              <Text style={styles.emptySavedTitle}>No saved addresses yet</Text>
+              <Text style={styles.emptySavedText}>
+                Add one in your profile to speed up checkout.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.savedList}>
+              {addresses.map((address) => {
+                const isSelected = address.id === selectedAddressId;
+                return (
+                  <TouchableOpacity
+                    key={address.id}
+                    style={[
+                      styles.savedAddressCard,
+                      isSelected && styles.savedAddressCardSelected,
+                    ]}
+                    onPress={() => handleSelectAddress(address)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.savedAddressHeader}>
+                      <Text style={styles.savedAddressLabel}>{address.label}</Text>
+                      {address.isDefault && (
+                        <Text style={styles.defaultBadge}>Default</Text>
+                      )}
+                    </View>
+                    <Text style={styles.savedAddressLine}>{address.street}</Text>
+                    <Text style={styles.savedAddressLine}>
+                      {address.city}, {address.state} {address.zipCode}
+                    </Text>
+                    <Text style={styles.savedAddressHint}>
+                      {isSelected ? 'Selected for this order' : 'Tap to use this address'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </Card>
+
+        {/* Delivery Address */}
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>📍 Delivery Address</Text>
+
+          <Input
+            label="Street Address"
+            placeholder="123 Main St, Apt 4B"
+            value={street}
+            onChangeText={(value) => handleAddressFieldChange(setStreet, value)}
+            autoCapitalize="words"
+          />
+
+          <View style={styles.row}>
+            <View style={styles.halfInput}>
+              <Input
+                label="City"
+                placeholder="Hamilton"
+                value={city}
+                onChangeText={(value) => handleAddressFieldChange(setCity, value)}
+                autoCapitalize="words"
+              />
+            </View>
+            <View style={styles.halfInput}>
+              <Input
+                label="State"
+                placeholder="ON"
+                value={state}
+                onChangeText={(value) => handleAddressFieldChange(setState, value)}
+                autoCapitalize="characters"
+              />
+            </View>
+          </View>
+
+          <Input
+            label="ZIP Code"
+            placeholder="L8P 1A1"
+            value={zipCode}
+            onChangeText={(value) => handleAddressFieldChange(setZipCode, value)}
+            autoCapitalize="characters"
+          />
+
+          <Input
+            label="Delivery Instructions (optional)"
+            placeholder="Gate code, building entrance, etc."
+            value={instructions}
+            onChangeText={setInstructions}
+            multiline
+          />
+        </Card>
+
+        {/* Payment */}
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>💳 Payment</Text>
+          <View style={styles.paymentInfo}>
+            <Text style={styles.paymentIcon}>💳</Text>
+            <View>
+              <Text style={styles.paymentLabel}>Pay with Stripe</Text>
+              <Text style={styles.paymentDesc}>
+                Secure payment powered by Stripe
+              </Text>
+            </View>
+          </View>
+        </Card>
+
+        {/* Order Summary */}
+        <OrderSummary
+          chef={chef || undefined}
+          items={items}
+          subtotal={subtotal}
+          deliveryFee={deliveryFee}
+          serviceFee={serviceFee}
+          tax={tax}
+          tip={tip}
+          promoDiscount={promoDiscount}
+          total={total}
+          deliveryAddress={`${street}, ${city}, ${state} ${zipCode}`.trim()}
+          estimatedDeliveryTime="30-45 min"
+        />
+      </ScrollView>
+
+      {/* Place Order Footer */}
+      <View style={styles.footer}>
+        <Button
+          title={loading ? 'Placing Order...' : `Place Order - ${formatCurrency(total)}`}
+          onPress={handlePlaceOrder}
+          loading={loading}
+          size="large"
+        />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f7f4ee',
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#5f5f5f',
+  },
+  card: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 16,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  manageLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ff9800',
+  },
+  emptySavedAddress: {
+    backgroundColor: '#fff8ef',
+    borderRadius: 12,
+    padding: 12,
+  },
+  emptySavedTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 4,
+  },
+  emptySavedText: {
+    fontSize: 13,
+    color: '#5f5f5f',
+  },
+  savedList: {
+    gap: 10,
+  },
+  savedAddressCard: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: '#fff',
+  },
+  savedAddressCardSelected: {
+    borderColor: '#ff9800',
+    backgroundColor: '#fff3e0',
+  },
+  savedAddressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  savedAddressLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#151515',
+  },
+  defaultBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ff9800',
+    backgroundColor: '#fff3e0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  savedAddressLine: {
+    fontSize: 13,
+    color: '#5f5f5f',
+    marginBottom: 2,
+  },
+  savedAddressHint: {
+    fontSize: 12,
+    color: '#9e9e9e',
+    marginTop: 6,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfInput: {
+    flex: 1,
+  },
+  paymentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+  },
+  paymentIcon: {
+    fontSize: 24,
+  },
+  paymentLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#151515',
+  },
+  paymentDesc: {
+    fontSize: 12,
+    color: '#5f5f5f',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    paddingBottom: 32,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+});

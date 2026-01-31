@@ -1,0 +1,31 @@
+/**
+ * Skeleton Loader Component - Loading placeholder for cards
+ */
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
+
+interface SkeletonLoaderProps {
+  count?: number;
+  height?: number;
+}
+
+export default function SkeletonLoader({ count = 3, height = 120 }: SkeletonLoaderProps) {
+  return (
+    <>
+      {Array(count).fill(0).map((_, index) => (
+        <View key={index} style={[styles.container, { height }]} />
+      ))}
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+});

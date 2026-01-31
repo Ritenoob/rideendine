@@ -2,7 +2,7 @@
  * Welcome Screen - Onboarding/landing screen
  */
 import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '@/components/ui';
@@ -45,9 +45,7 @@ export default function WelcomeScreen() {
             <Text style={styles.featureIcon}>💳</Text>
             <View style={styles.featureText}>
               <Text style={styles.featureTitle}>Secure Payments</Text>
-              <Text style={styles.featureDesc}>
-                Pay safely with Stripe-powered checkout
-              </Text>
+              <Text style={styles.featureDesc}>Pay safely with Stripe-powered checkout</Text>
             </View>
           </View>
         </View>

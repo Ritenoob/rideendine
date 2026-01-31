@@ -1,7 +1,7 @@
 /**
  * Orders Screen - Order history and active orders
  */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@/navigation/types';
 import { Card } from '@/components/ui';
 import { OrderStatusTimeline } from '@/components/order';
 import { api } from '@/services';
@@ -28,7 +30,7 @@ interface Order {
 }
 
 export default function OrdersScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   const [pastOrders, setPastOrders] = useState<Order[]>([]);
@@ -52,11 +54,11 @@ export default function OrdersScreen() {
           'assigned_to_driver',
           'picked_up',
           'in_transit',
-        ].includes(o.status)
+        ].includes(o.status),
       );
 
       const past = orders.filter((o: Order) =>
-        ['delivered', 'cancelled', 'refunded', 'rejected'].includes(o.status)
+        ['delivered', 'cancelled', 'refunded', 'rejected'].includes(o.status),
       );
 
       setActiveOrders(active);
@@ -72,7 +74,7 @@ export default function OrdersScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchOrders();
-    }, [fetchOrders])
+    }, [fetchOrders]),
   );
 
   const handleRefresh = () => {
@@ -111,13 +113,9 @@ export default function OrdersScreen() {
 
       <View style={styles.orderFooter}>
         <Text style={styles.orderDate}>{formatDate(item.createdAt)}</Text>
-        {activeTab === 'active' && (
-          <Text style={styles.trackLink}>Track Order →</Text>
-        )}
+        {activeTab === 'active' && <Text style={styles.trackLink}>Track Order →</Text>}
         {activeTab === 'past' && item.status === 'delivered' && (
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Review', { orderId: item.id })}
-          >
+          <TouchableOpacity onPress={() => navigation.navigate('Review', { orderId: item.id })}>
             <Text style={styles.reviewLink}>Leave Review</Text>
           </TouchableOpacity>
         )}
@@ -162,12 +160,7 @@ export default function OrdersScreen() {
           style={[styles.tab, activeTab === 'active' && styles.tabActive]}
           onPress={() => setActiveTab('active')}
         >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'active' && styles.tabTextActive,
-            ]}
-          >
+          <Text style={[styles.tabText, activeTab === 'active' && styles.tabTextActive]}>
             Active ({activeOrders.length})
           </Text>
         </TouchableOpacity>
@@ -175,12 +168,7 @@ export default function OrdersScreen() {
           style={[styles.tab, activeTab === 'past' && styles.tabActive]}
           onPress={() => setActiveTab('past')}
         >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'past' && styles.tabTextActive,
-            ]}
-          >
+          <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
             Past ({pastOrders.length})
           </Text>
         </TouchableOpacity>
@@ -193,11 +181,7 @@ export default function OrdersScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#ff9800"
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ff9800" />
         }
       />
     </SafeAreaView>

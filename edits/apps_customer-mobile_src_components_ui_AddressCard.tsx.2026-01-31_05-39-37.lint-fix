@@ -1,0 +1,187 @@
+/**
+ * Address Card Component
+ * Displays a saved address with selection and action buttons
+ */
+import React from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+} from 'react-native';
+
+export interface Address {
+  id: string;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
+  label?: string; // Home, Work, etc.
+  isDefault?: boolean;
+  latitude?: number;
+  longitude?: number;
+}
+
+interface AddressCardProps {
+  address: Address;
+  isSelected?: boolean;
+  onSelect?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onSetDefault?: () => void;
+}
+
+export default function AddressCard({
+  address,
+  isSelected = false,
+  onSelect,
+  onEdit,
+  onDelete,
+  onSetDefault,
+}: AddressCardProps) {
+  const formatAddress = () => {
+    const parts = [address.street, address.city, address.state, address.zip];
+    return parts.filter(Boolean).join(', ');
+  };
+
+  return (
+    <TouchableOpacity
+      style={[styles.container, isSelected && styles.containerSelected]}
+      onPress={onSelect}
+      activeOpacity={0.7}
+    >
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <View style={styles.labelContainer}>
+            {address.label && (
+              <Text style={styles.label}>{address.label}</Text>
+            )}
+            {address.isDefault && (
+              <View style={styles.defaultBadge}>
+                <Text style={styles.defaultBadgeText}>Default</Text>
+              </View>
+            )}
+          </View>
+          {isSelected && (
+            <View style={styles.selectedIndicator}>
+              <Text style={styles.selectedIndicatorText}>✓</Text>
+            </View>
+          )}
+        </View>
+
+        <Text style={styles.address}>{formatAddress()}</Text>
+
+        <View style={styles.actions}>
+          {onSetDefault && !address.isDefault && (
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={onSetDefault}
+            >
+              <Text style={styles.actionButtonText}>Set Default</Text>
+            </TouchableOpacity>
+          )}
+          {onEdit && (
+            <TouchableOpacity style={styles.actionButton} onPress={onEdit}>
+              <Text style={styles.actionButtonText}>Edit</Text>
+            </TouchableOpacity>
+          )}
+          {onDelete && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={onDelete}
+            >
+              <Text style={[styles.actionButtonText, styles.deleteButtonText]}>
+                Delete
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  containerSelected: {
+    borderColor: '#ff9800',
+    backgroundColor: '#fff5e6',
+  },
+  content: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  labelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#151515',
+  },
+  defaultBadge: {
+    backgroundColor: '#ff9800',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  defaultBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  selectedIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#ff9800',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedIndicatorText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  address: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#f0f0f0',
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#5f5f5f',
+  },
+  deleteButton: {
+    backgroundColor: '#ffebee',
+  },
+  deleteButtonText: {
+    color: '#d32f2f',
+  },
+});

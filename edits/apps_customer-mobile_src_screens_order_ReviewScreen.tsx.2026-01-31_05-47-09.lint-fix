@@ -1,0 +1,153 @@
+/**
+ * Review Screen - Leave review for order
+ */
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { Button, Card } from '@/components/ui';
+import { api } from '@/services';
+
+export default function ReviewScreen() {
+  const route = useRoute<any>();
+  const navigation = useNavigation();
+  const { orderId } = route.params;
+
+  const [chefRating, setChefRating] = useState(0);
+  const [chefComment, setChefComment] = useState('');
+  const [driverRating, setDriverRating] = useState(0);
+  const [driverComment, setDriverComment] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (chefRating === 0) {
+      Alert.alert('Rating Required', 'Please rate the chef.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api.createReview({
+        orderId,
+        chefRating,
+        chefComment: chefComment.trim() || undefined,
+        driverRating: driverRating > 0 ? driverRating : undefined,
+        driverComment: driverComment.trim() || undefined,
+      });
+
+      Alert.alert('Thank You!', 'Your review has been submitted.', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to submit review.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderStars = (rating: number, onPress: (value: number) => void) => (
+    <View style={styles.starsContainer}>
+      {[1, 2, 3, 4, 5].map((value) => (
+        <TouchableOpacity key={value} onPress={() => onPress(value)}>
+          <Text style={[styles.star, value <= rating && styles.starActive]}>★</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Chef Review */}
+      <Card style={styles.card}>
+        <Text style={styles.cardTitle}>👨‍🍳 Rate the Chef</Text>
+        <Text style={styles.cardDescription}>How was the food quality and preparation?</Text>
+
+        {renderStars(chefRating, setChefRating)}
+
+        <TextInput
+          style={styles.commentInput}
+          placeholder="Share your experience (optional)"
+          placeholderTextColor="#9e9e9e"
+          value={chefComment}
+          onChangeText={setChefComment}
+          multiline
+          numberOfLines={4}
+        />
+      </Card>
+
+      {/* Driver Review */}
+      <Card style={styles.card}>
+        <Text style={styles.cardTitle}>🚗 Rate the Driver</Text>
+        <Text style={styles.cardDescription}>How was the delivery experience?</Text>
+
+        {renderStars(driverRating, setDriverRating)}
+
+        <TextInput
+          style={styles.commentInput}
+          placeholder="Share your experience (optional)"
+          placeholderTextColor="#9e9e9e"
+          value={driverComment}
+          onChangeText={setDriverComment}
+          multiline
+          numberOfLines={4}
+        />
+      </Card>
+
+      {/* Submit Button */}
+      <Button title="Submit Review" onPress={handleSubmit} loading={loading} size="large" />
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f7f4ee',
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  card: {
+    marginBottom: 16,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 8,
+  },
+  cardDescription: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    marginBottom: 16,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  star: {
+    fontSize: 36,
+    color: '#e0e0e0',
+  },
+  starActive: {
+    color: '#ffc107',
+  },
+  commentInput: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 15,
+    color: '#151515',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+});

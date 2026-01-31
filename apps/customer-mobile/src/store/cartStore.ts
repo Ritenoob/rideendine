@@ -40,13 +40,16 @@ interface CartState {
   chef: Chef | null;
   items: CartItem[];
   tip: number;
+  tipType: 'percentage' | 'fixed';
+  promoCode: string | null;
+  promoDiscount: number;
   deliveryAddress: {
     street: string;
     city: string;
     state: string;
     zipCode: string;
-    lat: number;
-    lng: number;
+    lat?: number;
+    lng?: number;
     instructions?: string;
   } | null;
 
@@ -65,6 +68,9 @@ interface CartState {
   removeItem: (itemId: string) => void;
   updateInstructions: (itemId: string, instructions: string) => void;
   setTip: (amount: number) => void;
+  setTipType: (type: 'percentage' | 'fixed') => void;
+  applyPromoCode: (code: string) => { ok: boolean; message: string };
+  clearPromoCode: () => void;
   setDeliveryAddress: (address: CartState['deliveryAddress']) => void;
   clearCart: () => void;
 }
@@ -73,24 +79,56 @@ const SERVICE_FEE_RATE = 0.05;
 const TAX_RATE = 0.08;
 const BASE_DELIVERY_FEE = 500; // $5.00
 
-const calculateTotals = (items: CartItem[], tip: number) => {
-  const subtotal = items.reduce(
-    (sum, item) => sum + item.menuItem.price * item.quantity,
-    0
-  );
+const normalizePromoCode = (code?: string | null) => code?.trim().toUpperCase() || null;
+
+const calculatePromoDiscount = (code: string | null, subtotal: number, deliveryFee: number) => {
+  if (!code) return 0;
+  switch (code) {
+    case 'WELCOME10': {
+      return Math.min(Math.round(subtotal * 0.1), 1000);
+    }
+    case 'SAVE5': {
+      return 500;
+    }
+    case 'FREEDLV': {
+      return deliveryFee;
+    }
+    case 'RIDENDINE15': {
+      return Math.min(Math.round(subtotal * 0.15), 1500);
+    }
+    default:
+      return 0;
+  }
+};
+
+const calculateTotals = (items: CartItem[], tip: number, promoCode: string | null) => {
+  const subtotal = items.reduce((sum, item) => sum + item.menuItem.price * item.quantity, 0);
   const deliveryFee = items.length > 0 ? BASE_DELIVERY_FEE : 0;
   const serviceFee = Math.round(subtotal * SERVICE_FEE_RATE);
   const tax = Math.round((subtotal + serviceFee) * TAX_RATE);
-  const total = subtotal + deliveryFee + serviceFee + tax + tip;
+  const promoDiscount = calculatePromoDiscount(promoCode, subtotal, deliveryFee);
+  const preDiscountTotal = subtotal + deliveryFee + serviceFee + tax + tip;
+  const total = Math.max(preDiscountTotal - promoDiscount, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
-  return { subtotal, deliveryFee, serviceFee, tax, total, itemCount };
+  return {
+    subtotal,
+    deliveryFee,
+    serviceFee,
+    tax,
+    promoDiscount,
+    total,
+    itemCount,
+  };
 };
 
 export const useCartStore = create<CartState>((set, get) => ({
   chef: null,
   items: [],
   tip: 0,
+  tipType: 'percentage',
+  promoCode: null,
+  promoDiscount: 0,
   deliveryAddress: null,
   subtotal: 0,
   deliveryFee: 0,
@@ -107,7 +145,10 @@ export const useCartStore = create<CartState>((set, get) => ({
         chef,
         items: [],
         tip: 0,
-        ...calculateTotals([], 0),
+        tipType: 'percentage',
+        promoCode: null,
+        promoDiscount: 0,
+        ...calculateTotals([], 0, null),
       });
     } else {
       set({ chef });
@@ -115,7 +156,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   addItem: (item, quantity = 1, instructions) => {
-    const { items, tip } = get();
+    const { items, tip, promoCode } = get();
     const existingIndex = items.findIndex((i) => i.menuItem.id === item.id);
 
     let newItems: CartItem[];
@@ -123,7 +164,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       newItems = items.map((cartItem, index) =>
         index === existingIndex
           ? { ...cartItem, quantity: cartItem.quantity + quantity }
-          : cartItem
+          : cartItem,
       );
     } else {
       newItems = [...items, { menuItem: item, quantity, specialInstructions: instructions }];
@@ -131,50 +172,86 @@ export const useCartStore = create<CartState>((set, get) => ({
 
     set({
       items: newItems,
-      ...calculateTotals(newItems, tip),
+      ...calculateTotals(newItems, tip, promoCode),
     });
   },
 
   updateItemQuantity: (itemId, quantity) => {
-    const { items, tip } = get();
+    const { items, tip, promoCode } = get();
     const newItems =
       quantity <= 0
         ? items.filter((item) => item.menuItem.id !== itemId)
-        : items.map((item) =>
-            item.menuItem.id === itemId ? { ...item, quantity } : item
-          );
+        : items.map((item) => (item.menuItem.id === itemId ? { ...item, quantity } : item));
 
     set({
       items: newItems,
-      ...calculateTotals(newItems, tip),
+      ...calculateTotals(newItems, tip, promoCode),
     });
   },
 
   removeItem: (itemId) => {
-    const { items, tip } = get();
+    const { items, tip, promoCode } = get();
     const newItems = items.filter((item) => item.menuItem.id !== itemId);
 
     set({
       items: newItems,
-      ...calculateTotals(newItems, tip),
+      ...calculateTotals(newItems, tip, promoCode),
     });
   },
 
   updateInstructions: (itemId, instructions) => {
     const { items } = get();
     const newItems = items.map((item) =>
-      item.menuItem.id === itemId
-        ? { ...item, specialInstructions: instructions }
-        : item
+      item.menuItem.id === itemId ? { ...item, specialInstructions: instructions } : item,
     );
     set({ items: newItems });
   },
 
   setTip: (amount) => {
-    const { items } = get();
+    const { items, promoCode } = get();
     set({
       tip: amount,
-      ...calculateTotals(items, amount),
+      ...calculateTotals(items, amount, promoCode),
+    });
+  },
+
+  setTipType: (type) => {
+    set({ tipType: type });
+  },
+
+  applyPromoCode: (code) => {
+    const { items, tip } = get();
+    const normalized = normalizePromoCode(code);
+
+    if (!normalized) {
+      return { ok: false, message: 'Enter a promo code to apply.' };
+    }
+
+    const totals = calculateTotals(items, tip, normalized);
+    if (totals.promoDiscount <= 0) {
+      set({
+        promoCode: null,
+        promoDiscount: 0,
+        ...calculateTotals(items, tip, null),
+      });
+      return { ok: false, message: 'Promo code not recognized.' };
+    }
+
+    set({
+      promoCode: normalized,
+      promoDiscount: totals.promoDiscount,
+      ...totals,
+    });
+
+    return { ok: true, message: `Promo ${normalized} applied.` };
+  },
+
+  clearPromoCode: () => {
+    const { items, tip } = get();
+    set({
+      promoCode: null,
+      promoDiscount: 0,
+      ...calculateTotals(items, tip, null),
     });
   },
 
@@ -187,8 +264,11 @@ export const useCartStore = create<CartState>((set, get) => ({
       chef: null,
       items: [],
       tip: 0,
+      tipType: 'percentage',
+      promoCode: null,
+      promoDiscount: 0,
       deliveryAddress: null,
-      ...calculateTotals([], 0),
+      ...calculateTotals([], 0, null),
     });
   },
 }));

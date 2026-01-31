@@ -7,6 +7,7 @@ RideNDine is a multi-role delivery platform demo with live routing, dispatch, pr
 ## Table of Contents
 - Overview
 - Features
+- Implementation Status
 - Architecture
 - Quick Start (Core Demo)
 - Customer Web (React)
@@ -42,14 +43,18 @@ The demo is intentionally production-shaped: auth scoping, GPS ingestion, routin
 - Customer web + mobile prototypes
 - Service-split architecture (in progress)
 
-## Status at a Glance
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Core demo server + UI | Working | Use for end-to-end flows |
-| Customer web (React) | Working prototype | Static host via python http.server |
-| Customer mobile (Expo) | Working prototype | Requires LAN IP to reach core demo |
-| Service split (api/dispatch/routing/realtime) | Prototypes, not integrated | API is NestJS WIP + stub; others are Node prototypes |
-| Database | Empty | docker-compose exists, no schema/migrations applied |
+## Implementation Status
+| Component | Status | Port | Run Command | Notes |
+|-----------|--------|------|-------------|-------|
+| Core demo server + UI | Working | 8081 | `node ridendine_v2_live_routing/server.js` | Single Node process handling auth, GPS ingestion, routing proxy, dispatch, pricing, reliability, and WebSocket telemetry. |
+| Customer web (React) | Working prototype | 8010 | `python3 -m http.server 8010 --directory apps/customer-web-react` | Leaflet tracker with ETA/status polling; points to the core demo server. |
+| Customer mobile (Expo) | Working prototype | 8082 | `cd apps/customer-mobile && npx expo start` | Expo/React Native tracker that uses your LAN IP to reach the core demo and supports deep links like `ridendine://track?orderId=…`. |
+| API service (NestJS WIP + demo stub) | Prototype | 9001 | `cd services/api && npm run start:dev` (WIP) or `node services/api/server.js` (stub) | Planned REST + auth surface; current server only responds to health checks. |
+| Dispatch service | Prototype (not integrated) | 9002 | `node services/dispatch/server.js` | Haversine scoring, driver assignment, and batching prototype. |
+| Routing service | Prototype (not integrated) | 9003 | `node services/routing/server.js` | Provider abstraction for OSRM/Mapbox/Google routing + ETA calculations. |
+| Realtime gateway | Prototype (not integrated) | 9004 | `node services/realtime/server.js` | HTTP/WS proxy designed to offload the core demo’s WebSocket traffic. |
+| Database | Empty | 5432 | `docker-compose up` | Containers are defined but no schema/fixtures are applied yet. |
+| API client SDK | Docs only | — | Not implemented | Documentation exists under `packages/api-client/`, but there is no runnable client yet. |
 
 ---
 
@@ -189,17 +194,24 @@ If a port is busy, update the UI input fields or change the server `PORT` consta
 ---
 
 ## Troubleshooting
-**Nothing happens after clicking “Run Live Dispatch”**
-- Confirm core server is running on the port shown in UI
-- Check `/tmp/ridendine_core.log`
+### Port conflicts or “connection refused”
+- Run `lsof -i :8081` (or replace `:8081` with `:8010`, `:8082`, etc.) to see if another process already owns a RideNDine port.  
+- Kill the blocking process with `kill $(lsof -t -i :PORT)` or update the UI/server constants to a free port.  
+- If traffic still fails, confirm the core server process is still running in `nohup` output or `ps` and check `/tmp/ridendine_core.log` for startup errors.
 
-**WebSocket invalid frame header**
-- Ensure the core server is the only process on that port
-- Restart the server
+### WebSocket stability
+- Confirm the WebSocket URL in the UI matches the core server port (default `ws://localhost:8081/?token=…`).  
+- If you see “invalid frame header,” restart the core server and make sure no other server is bound to that port.  
+- Tail the log `tail -n 50 /tmp/ridendine_core.log` for frame or auth errors, and check that tokens are generated via `POST /api/auth/login` before the WS handshake.
 
-**Mobile cannot connect**
-- Use your computer’s LAN IP, not localhost
-- Ensure firewall allows port 8081
+### Mobile/Expo connectivity
+- Mobile builds cannot resolve `localhost`; provide your LAN IP via `hostname -I | awk '{print $1}'` and enter `http://<IP>:8081` into the Expo client.  
+- Ensure firewall/AV software allows incoming connections on 8081.  
+- Run `npx expo doctor` from `apps/customer-mobile` if the bundle fails to load, and restart the bundler after fixing any reported issues.
+
+### Order/status visibility
+- Orders are created from the core demo UI. Make sure you select one from the dropdown before copying the ID into customer apps.  
+- The customer UI polls the core server every few seconds; if you see stale data, refresh the browser or rerun `Run Live Dispatch` plus `Run Assignments`.
 
 ---
 

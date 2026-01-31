@@ -1,0 +1,276 @@
+/**
+ * Order Summary Component
+ * Displays complete order breakdown with costs and details
+ */
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+} from 'react-native';
+
+export interface OrderSummaryProps {
+  chef?: {
+    id: string;
+    businessName: string;
+    city: string;
+    profileImageUrl?: string;
+    minimumOrder?: number;
+  };
+  items: Array<{
+    menuItem: {
+      id: string;
+      name: string;
+      price: number;
+    };
+    quantity: number;
+    specialInstructions?: string;
+  }>;
+  subtotal: number;
+  deliveryFee: number;
+  serviceFee: number;
+  tax: number;
+  tip: number;
+  promoDiscount?: number;
+  total: number;
+  deliveryAddress?: string;
+  estimatedDeliveryTime?: string;
+}
+
+export default function OrderSummary({
+  chef,
+  items,
+  subtotal,
+  deliveryFee,
+  serviceFee,
+  tax,
+  tip,
+  promoDiscount,
+  total,
+  deliveryAddress,
+  estimatedDeliveryTime,
+}: OrderSummaryProps) {
+  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+  return (
+    <View style={styles.container}>
+      {/* Chef Info */}
+      {chef && (
+        <View style={styles.chefSection}>
+          <Text style={styles.sectionTitle}>Chef</Text>
+          <View style={styles.chefInfo}>
+            <Text style={styles.chefName}>{chef.businessName}</Text>
+            <Text style={styles.chefLocation}>{chef.city}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Items Summary */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Items ({items.length})</Text>
+        {items.map((item, index) => (
+          <View
+            key={item.menuItem.id}
+            style={[
+              styles.itemRow,
+              index < items.length - 1 && styles.itemRowBorder,
+            ]}
+          >
+            <View style={styles.itemInfo}>
+              <Text style={styles.itemName}>
+                {item.quantity}x {item.menuItem.name}
+              </Text>
+              {item.specialInstructions && (
+                <Text style={styles.itemInstructions}>
+                  Note: {item.specialInstructions}
+                </Text>
+              )}
+            </View>
+            <Text style={styles.itemPrice}>
+              {formatCurrency(item.menuItem.price * item.quantity)}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Delivery Address */}
+      {deliveryAddress && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Delivery Address</Text>
+          <Text style={styles.addressText}>{deliveryAddress}</Text>
+        </View>
+      )}
+
+      {/* Estimated Delivery Time */}
+      {estimatedDeliveryTime && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Estimated Delivery</Text>
+          <Text style={styles.deliveryTime}>{estimatedDeliveryTime}</Text>
+        </View>
+      )}
+
+      {/* Cost Breakdown */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Order Summary</Text>
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Subtotal</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(subtotal)}</Text>
+        </View>
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Delivery Fee</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(deliveryFee)}</Text>
+        </View>
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Service Fee</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(serviceFee)}</Text>
+        </View>
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Tax</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(tax)}</Text>
+        </View>
+
+        {tip > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Tip</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(tip)}</Text>
+          </View>
+        )}
+
+        {promoDiscount && promoDiscount > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, styles.discountLabel]}>
+              Promo Discount
+            </Text>
+            <Text style={[styles.summaryValue, styles.discountValue]}>
+              -{formatCurrency(promoDiscount)}
+            </Text>
+          </View>
+        )}
+
+        <View style={[styles.summaryRow, styles.totalRow]}>
+          <Text style={styles.totalLabel}>Total</Text>
+          <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  chefSection: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 12,
+  },
+  chefInfo: {
+    gap: 4,
+  },
+  chefName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#151515',
+  },
+  chefLocation: {
+    fontSize: 13,
+    color: '#5f5f5f',
+  },
+  section: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+  },
+  itemRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5',
+  },
+  itemInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  itemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#151515',
+    marginBottom: 2,
+  },
+  itemInstructions: {
+    fontSize: 12,
+    color: '#9e9e9e',
+    fontStyle: 'italic',
+  },
+  itemPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#151515',
+  },
+  addressText: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    lineHeight: 20,
+  },
+  deliveryTime: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ff9800',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#5f5f5f',
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#151515',
+  },
+  discountLabel: {
+    color: '#2e7d32',
+  },
+  discountValue: {
+    color: '#2e7d32',
+  },
+  totalRow: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 2,
+    borderTopColor: '#e0e0e0',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ff9800',
+  },
+});

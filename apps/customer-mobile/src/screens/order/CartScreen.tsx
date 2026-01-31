@@ -1,22 +1,16 @@
 /**
  * Cart Screen - View and manage cart items
  */
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Image,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Button, Card } from '@/components/ui';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@/navigation/types';
+import { Button, Card, AddressInput, TipSelector, PromoCodeInput } from '@/components/ui';
 import { useCartStore } from '@/store';
 
 export default function CartScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const {
     chef,
     items,
@@ -25,16 +19,34 @@ export default function CartScreen() {
     serviceFee,
     tax,
     tip,
+    promoCode,
+    promoDiscount,
+    tipType,
     total,
     setTip,
+    setTipType,
     updateItemQuantity,
     removeItem,
     clearCart,
+    applyPromoCode,
+    clearPromoCode,
   } = useCartStore();
+
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const handleTipTypeChange = (type: 'percentage' | 'fixed') => {
+    setTipType(type);
+  };
 
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
-  const tipOptions = [0, 200, 300, 500]; // $0, $2, $3, $5
+  const handlePromoApply = async (code: string) => {
+    const result = applyPromoCode(code);
+    return {
+      valid: result.ok,
+      discount: result.ok ? useCartStore.getState().promoDiscount : undefined,
+      message: result.message,
+    };
+  };
 
   const handleCheckout = () => {
     if (!chef) return;
@@ -42,12 +54,30 @@ export default function CartScreen() {
     if (subtotal < chef.minimumOrder) {
       Alert.alert(
         'Minimum Order Not Met',
-        `This chef requires a minimum order of ${formatCurrency(chef.minimumOrder)}. Please add more items.`
+        `This chef requires a minimum order of ${formatCurrency(chef.minimumOrder)}. Please add more items.`,
       );
       return;
     }
 
-    navigation.navigate('Checkout');
+    if (!deliveryAddress.trim()) {
+      Alert.alert('Delivery Address Required', 'Please enter a delivery address to proceed.');
+      return;
+    }
+
+    navigation.navigate('Checkout', {
+      cartData: {
+        chef,
+        items,
+        subtotal,
+        deliveryFee,
+        serviceFee,
+        tax,
+        tip,
+        promoDiscount,
+        total,
+        deliveryAddress,
+      },
+    });
   };
 
   const handleClearCart = () => {
@@ -62,9 +92,7 @@ export default function CartScreen() {
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyIcon}>🛒</Text>
         <Text style={styles.emptyTitle}>Your cart is empty</Text>
-        <Text style={styles.emptyText}>
-          Add some delicious items from our chefs
-        </Text>
+        <Text style={styles.emptyText}>Add some delicious items from our chefs</Text>
         <Button
           title="Browse Chefs"
           onPress={() => navigation.navigate('Main')}
@@ -98,20 +126,13 @@ export default function CartScreen() {
           {items.map((cartItem, index) => (
             <View
               key={cartItem.menuItem.id}
-              style={[
-                styles.cartItem,
-                index < items.length - 1 && styles.cartItemBorder,
-              ]}
+              style={[styles.cartItem, index < items.length - 1 && styles.cartItemBorder]}
             >
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{cartItem.menuItem.name}</Text>
-                <Text style={styles.itemPrice}>
-                  {formatCurrency(cartItem.menuItem.price)}
-                </Text>
+                <Text style={styles.itemPrice}>{formatCurrency(cartItem.menuItem.price)}</Text>
                 {cartItem.specialInstructions && (
-                  <Text style={styles.itemInstructions}>
-                    Note: {cartItem.specialInstructions}
-                  </Text>
+                  <Text style={styles.itemInstructions}>Note: {cartItem.specialInstructions}</Text>
                 )}
               </View>
 
@@ -121,10 +142,7 @@ export default function CartScreen() {
                   onPress={() =>
                     cartItem.quantity === 1
                       ? removeItem(cartItem.menuItem.id)
-                      : updateItemQuantity(
-                          cartItem.menuItem.id,
-                          cartItem.quantity - 1
-                        )
+                      : updateItemQuantity(cartItem.menuItem.id, cartItem.quantity - 1)
                   }
                 >
                   <Text style={styles.quantityButtonText}>
@@ -134,12 +152,7 @@ export default function CartScreen() {
                 <Text style={styles.quantity}>{cartItem.quantity}</Text>
                 <TouchableOpacity
                   style={styles.quantityButton}
-                  onPress={() =>
-                    updateItemQuantity(
-                      cartItem.menuItem.id,
-                      cartItem.quantity + 1
-                    )
-                  }
+                  onPress={() => updateItemQuantity(cartItem.menuItem.id, cartItem.quantity + 1)}
                 >
                   <Text style={styles.quantityButtonText}>+</Text>
                 </TouchableOpacity>
@@ -147,82 +160,72 @@ export default function CartScreen() {
             </View>
           ))}
 
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={handleClearCart}
-          >
+          <TouchableOpacity style={styles.clearButton} onPress={handleClearCart}>
             <Text style={styles.clearButtonText}>Clear Cart</Text>
           </TouchableOpacity>
         </Card>
 
+        {/* Delivery Address */}
+        <AddressInput
+          value={deliveryAddress}
+          onChange={setDeliveryAddress}
+          placeholder="Enter delivery address"
+        />
+
         {/* Tip Section */}
         <Card style={styles.tipCard}>
-          <Text style={styles.tipTitle}>Add a tip for your driver</Text>
-          <View style={styles.tipOptions}>
-            {tipOptions.map((tipAmount) => (
-              <TouchableOpacity
-                key={tipAmount}
+          <Text style={styles.tipTitle}>Driver Tip</Text>
+          <View style={styles.tipToggleRow}>
+            <TouchableOpacity
+              style={[
+                styles.tipToggleButton,
+                tipType === 'percentage' && styles.tipToggleButtonActive,
+              ]}
+              onPress={() => handleTipTypeChange('percentage')}
+            >
+              <Text
                 style={[
-                  styles.tipOption,
-                  tip === tipAmount && styles.tipOptionActive,
+                  styles.tipToggleText,
+                  tipType === 'percentage' && styles.tipToggleTextActive,
                 ]}
-                onPress={() => setTip(tipAmount)}
               >
-                <Text
-                  style={[
-                    styles.tipOptionText,
-                    tip === tipAmount && styles.tipOptionTextActive,
-                  ]}
-                >
-                  {tipAmount === 0 ? 'No Tip' : formatCurrency(tipAmount)}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                % of subtotal
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tipToggleButton, tipType === 'fixed' && styles.tipToggleButtonActive]}
+              onPress={() => handleTipTypeChange('fixed')}
+            >
+              <Text
+                style={[styles.tipToggleText, tipType === 'fixed' && styles.tipToggleTextActive]}
+              >
+                $ fixed
+              </Text>
+            </TouchableOpacity>
           </View>
+          <TipSelector
+            subtotal={subtotal}
+            selectedTip={tip}
+            onTipChange={setTip}
+            tipType={tipType}
+          />
         </Card>
 
-        {/* Order Summary */}
-        <Card style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Order Summary</Text>
+        {/* Promo Code */}
+        <PromoCodeInput
+          onApply={handlePromoApply}
+          appliedCode={promoCode || undefined}
+          discount={promoDiscount}
+          onRemove={clearPromoCode}
+        />
 
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(subtotal)}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Delivery Fee</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(deliveryFee)}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Service Fee</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(serviceFee)}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Tax</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(tax)}</Text>
-          </View>
-
-          {tip > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Tip</Text>
-              <Text style={styles.summaryValue}>{formatCurrency(tip)}</Text>
-            </View>
-          )}
-
-          <View style={[styles.summaryRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
-          </View>
-        </Card>
+        {/* Order Summary moved to Checkout */}
       </ScrollView>
 
       {/* Checkout Footer */}
       <View style={styles.footer}>
         <Button
-          title={`Checkout - ${formatCurrency(total)}`}
+          title={`Checkout - ${formatCurrency(finalTotal)}`}
           onPress={handleCheckout}
           size="large"
         />
@@ -355,6 +358,32 @@ const styles = StyleSheet.create({
   },
   tipCard: {
     marginBottom: 16,
+  },
+  tipToggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  tipToggleButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  tipToggleButtonActive: {
+    backgroundColor: '#ff9800',
+    borderColor: '#ff9800',
+  },
+  tipToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#5f5f5f',
+  },
+  tipToggleTextActive: {
+    color: '#fff',
   },
   tipTitle: {
     fontSize: 15,

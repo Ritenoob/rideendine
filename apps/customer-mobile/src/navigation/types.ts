@@ -10,7 +10,7 @@ export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   Main: NavigatorScreenParams<MainTabParamList>;
   ChefDetail: { chefId: string };
-  MenuItem: { item: any; chef: any };
+  MenuItem: { item: MenuItemParam; chef: ChefParam };
   Cart: undefined;
   Checkout: undefined;
   OrderConfirmation: { orderId: string };
@@ -40,25 +40,48 @@ export type MainTabParamList = {
   Profile: undefined;
 };
 
+export type MenuItemParam = {
+  id: string;
+  name: string;
+  price: number;
+  description?: string;
+  imageUrl?: string;
+  preparationTime?: number;
+  isAvailable?: boolean;
+  allergens?: string[];
+  isVegetarian?: boolean;
+  isVegan?: boolean;
+  isGlutenFree?: boolean;
+  spiceLevel?: number;
+};
+
+export type ChefParam = {
+  id: string;
+  businessName: string;
+  profileImageUrl?: string;
+  address?: string;
+  city?: string;
+  deliveryRadius?: number;
+  minimumOrder?: number;
+  averagePrepTime?: number;
+};
+
 // Screen props types
-export type RootStackScreenProps<T extends keyof RootStackParamList> =
-  NativeStackScreenProps<RootStackParamList, T>;
+export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<
+  RootStackParamList,
+  T
+>;
 
-export type AuthStackScreenProps<T extends keyof AuthStackParamList> =
-  CompositeScreenProps<
-    NativeStackScreenProps<AuthStackParamList, T>,
-    NativeStackScreenProps<RootStackParamList>
-  >;
+export type AuthStackScreenProps<T extends keyof AuthStackParamList> = CompositeScreenProps<
+  NativeStackScreenProps<AuthStackParamList, T>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
-export type MainTabScreenProps<T extends keyof MainTabParamList> =
-  CompositeScreenProps<
-    BottomTabScreenProps<MainTabParamList, T>,
-    NativeStackScreenProps<RootStackParamList>
-  >;
+export type MainTabScreenProps<T extends keyof MainTabParamList> = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, T>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
-// Declare global types for useNavigation hook
-declare global {
-  namespace ReactNavigation {
-    interface RootParamList extends RootStackParamList {}
-  }
+declare module '@react-navigation/native' {
+  export interface RootParamList extends RootStackParamList {}
 }

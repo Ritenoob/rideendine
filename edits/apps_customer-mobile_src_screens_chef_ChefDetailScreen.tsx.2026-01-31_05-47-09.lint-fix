@@ -1,0 +1,522 @@
+/**
+ * Chef Detail Screen - Chef profile with menu, reviews, and info tabs
+ */
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Image,
+  TouchableOpacity,
+  SectionList,
+  ActivityIndicator,
+} from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { MenuItemCard, ReviewCard } from '@/components/chef';
+import { Button, TabView } from '@/components/ui';
+import { api } from '@/services';
+import { useCartStore, useFavoritesStore } from '@/store';
+
+interface MenuItem {
+  id: string;
+  menuId: string;
+  name: string;
+  description?: string;
+  price: number;
+  imageUrl?: string;
+  category: string;
+  isAvailable: boolean;
+  preparationTime: number;
+  allergens: string[];
+  isVegetarian: boolean;
+  isVegan: boolean;
+  isGlutenFree: boolean;
+  spiceLevel: number;
+}
+
+interface Review {
+  id: string;
+  reviewerName: string;
+  rating: number;
+  comment: string;
+  date: string;
+}
+
+interface Chef {
+  id: string;
+  businessName: string;
+  description?: string;
+  cuisineTypes: string[];
+  profileImageUrl?: string;
+  bannerImageUrl?: string;
+  address: string;
+  city: string;
+  rating: number;
+  reviewCount: number;
+  averagePrepTime: number;
+  minimumOrder: number;
+  deliveryRadius: number;
+  operatingHours?: any[];
+}
+
+const TABS = [
+  { id: 'menu', label: 'Menu' },
+  { id: 'reviews', label: 'Reviews' },
+  { id: 'info', label: 'Info' },
+];
+
+export default function ChefDetailScreen() {
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const { chefId } = route.params;
+
+  const { setChef, addItem, itemCount, chef: cartChef, total } = useCartStore();
+  const { isFavorite, toggleFavorite, loadFavorites } = useFavoritesStore();
+
+  const [chef, setChefData] = useState<Chef | null>(null);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('menu');
+
+  useEffect(() => {
+    loadFavorites();
+  }, [loadFavorites]);
+
+  const normalizeReviews = (data: any): Review[] => {
+    const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+
+    return list.map((review: any, index: number) => ({
+      id: review.id || review.reviewId || `${chefId}-${index}`,
+      reviewerName:
+        review.reviewerName || review.customerName || review.customer?.name || 'Customer',
+      rating: Number(review.rating ?? review.chefRating ?? review.score ?? 0),
+      comment: review.comment || review.chefComment || review.text || 'Delicious meal!',
+      date: review.date || review.createdAt || new Date().toISOString(),
+    }));
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [chefData, menusData, reviewsData] = await Promise.all([
+          api.getChef(chefId),
+          api.getChefMenus(chefId),
+          api.getChefReviews(chefId),
+        ]);
+
+        setChefData(chefData);
+
+        // Flatten menu items from all menus
+        const allItems = menusData.flatMap((menu: any) => menu.items || []);
+        setMenuItems(allItems);
+        setReviews(normalizeReviews(reviewsData));
+      } catch (error) {
+        console.error('Failed to fetch chef data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [chefId]);
+
+  const handleAddToCart = (item: MenuItem) => {
+    if (chef) {
+      setChef({
+        id: chef.id,
+        businessName: chef.businessName,
+        profileImageUrl: chef.profileImageUrl,
+        address: chef.address,
+        city: chef.city,
+        deliveryRadius: chef.deliveryRadius,
+        minimumOrder: chef.minimumOrder,
+        averagePrepTime: chef.averagePrepTime,
+      });
+      addItem(item);
+    }
+  };
+
+  const handleItemPress = (item: MenuItem) => {
+    navigation.navigate('MenuItem', { item, chef });
+  };
+
+  const handleFavoritePress = () => {
+    if (chef) {
+      toggleFavorite({
+        id: chef.id,
+        businessName: chef.businessName,
+        cuisineTypes: chef.cuisineTypes || [],
+        profileImageUrl: chef.profileImageUrl,
+        rating: chef.rating || 0,
+        reviewCount: chef.reviewCount || 0,
+        averagePrepTime: chef.averagePrepTime || 0,
+        minimumOrder: chef.minimumOrder || 0,
+        city: chef.city,
+      });
+    }
+  };
+
+  // Group items by category
+  const sections = menuItems.reduce((acc: { title: string; data: MenuItem[] }[], item) => {
+    const existing = acc.find((s) => s.title === item.category);
+    if (existing) {
+      existing.data.push(item);
+    } else {
+      acc.push({ title: item.category, data: [item] });
+    }
+    return acc;
+  }, []);
+
+  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+  const formatOperatingHours = (hours: any[]) => {
+    if (!hours || hours.length === 0) return 'Not available';
+    return hours.map((h: any) => `${h.day}: ${h.open} - ${h.close}`).join('\n');
+  };
+
+  const reviewSummary = useMemo(() => {
+    if (!reviews.length) return null;
+    const avg = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
+    return avg.toFixed(1);
+  }, [reviews]);
+
+  const renderMenuTab = () => (
+    <SectionList
+      sections={sections}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <MenuItemCard
+          item={item}
+          onPress={() => handleItemPress(item)}
+          onAddToCart={() => handleAddToCart(item)}
+        />
+      )}
+      renderSectionHeader={({ section: { title } }) => (
+        <Text style={styles.sectionHeader}>{title}</Text>
+      )}
+      contentContainerStyle={styles.listContent}
+      stickySectionHeadersEnabled={false}
+    />
+  );
+
+  const renderReviewsTab = () => {
+    if (reviews.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>⭐</Text>
+          <Text style={styles.emptyTitle}>No reviews yet</Text>
+          <Text style={styles.emptyText}>Be the first to review {chef?.businessName}</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.reviewsContainer}>
+        {reviewSummary && (
+          <Text style={styles.reviewSummary}>
+            ⭐ {reviewSummary} • {reviews.length} reviews
+          </Text>
+        )}
+        {reviews.map((review) => (
+          <ReviewCard
+            key={review.id}
+            reviewerName={review.reviewerName}
+            rating={review.rating}
+            comment={review.comment}
+            date={review.date}
+          />
+        ))}
+      </View>
+    );
+  };
+
+  const renderInfoTab = () => (
+    <View style={styles.infoContainer}>
+      <View style={styles.infoSection}>
+        <Text style={styles.infoSectionTitle}>About</Text>
+        {chef?.description && <Text style={styles.infoText}>{chef.description}</Text>}
+      </View>
+
+      <View style={styles.infoSection}>
+        <Text style={styles.infoSectionTitle}>Location</Text>
+        <Text style={styles.infoText}>{chef?.address}</Text>
+        <Text style={styles.infoText}>{chef?.city}</Text>
+      </View>
+
+      <View style={styles.infoSection}>
+        <Text style={styles.infoSectionTitle}>Operating Hours</Text>
+        <Text style={styles.infoText}>
+          {chef?.operatingHours ? formatOperatingHours(chef.operatingHours) : 'Not available'}
+        </Text>
+      </View>
+
+      <View style={styles.infoSection}>
+        <Text style={styles.infoSectionTitle}>Delivery Info</Text>
+        <Text style={styles.infoText}>Delivery radius: {chef?.deliveryRadius} miles</Text>
+        <Text style={styles.infoText}>
+          Minimum order: {formatCurrency(chef?.minimumOrder || 0)}
+        </Text>
+        <Text style={styles.infoText}>Average prep time: {chef?.averagePrepTime} minutes</Text>
+      </View>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ff9800" />
+      </View>
+    );
+  }
+
+  if (!chef) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Chef not found</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ScrollView>
+        {/* Banner */}
+        <Image
+          source={{
+            uri:
+              chef.bannerImageUrl || chef.profileImageUrl || 'https://via.placeholder.com/400x200',
+          }}
+          style={styles.banner}
+        />
+
+        {/* Chef Info */}
+        <View style={styles.chefInfo}>
+          <Image
+            source={{
+              uri: chef.profileImageUrl || 'https://via.placeholder.com/80',
+            }}
+            style={styles.avatar}
+          />
+          <View style={styles.infoContent}>
+            <View style={styles.headerRow}>
+              <Text style={styles.name}>{chef.businessName}</Text>
+              <TouchableOpacity
+                style={styles.favoriteButton}
+                onPress={handleFavoritePress}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.favoriteIcon}>{isFavorite(chef.id) ? '❤️' : '🤍'}</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.cuisines}>{chef.cuisineTypes.join(' • ')}</Text>
+            <View style={styles.stats}>
+              <Text style={styles.stat}>
+                ⭐ {chef.rating.toFixed(1)} ({chef.reviewCount})
+              </Text>
+              <Text style={styles.stat}>⏱️ {chef.averagePrepTime} min</Text>
+              <Text style={styles.stat}>📍 {chef.city}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Tabs */}
+        <TabView tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+
+        {/* Tab Content */}
+        <View style={styles.tabContent}>
+          {activeTab === 'menu' && renderMenuTab()}
+          {activeTab === 'reviews' && renderReviewsTab()}
+          {activeTab === 'info' && renderInfoTab()}
+        </View>
+      </ScrollView>
+
+      {/* Cart Footer */}
+      {cartChef?.id === chef.id && itemCount > 0 && (
+        <View style={styles.cartFooter}>
+          <View style={styles.cartInfo}>
+            <Text style={styles.cartItemCount}>{itemCount} items</Text>
+            <Text style={styles.cartTotal}>{formatCurrency(total)}</Text>
+          </View>
+          <Button title="View Cart" onPress={() => navigation.navigate('Cart')} size="medium" />
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f7f4ee',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#9e9e9e',
+  },
+  banner: {
+    width: '100%',
+    height: 200,
+    backgroundColor: '#e0e0e0',
+  },
+  chefInfo: {
+    flexDirection: 'row',
+    padding: 16,
+    backgroundColor: '#fff',
+    marginTop: -40,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  avatar: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#f0f0f0',
+  },
+  infoContent: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  name: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#151515',
+    flex: 1,
+  },
+  favoriteButton: {
+    padding: 4,
+  },
+  favoriteIcon: {
+    fontSize: 24,
+  },
+  cuisines: {
+    fontSize: 13,
+    color: '#5f5f5f',
+    marginTop: 4,
+  },
+  stats: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  stat: {
+    fontSize: 12,
+    color: '#5f5f5f',
+  },
+  tabContent: {
+    minHeight: 400,
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+    backgroundColor: '#f7f4ee',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 100,
+  },
+  reviewsContainer: {
+    padding: 16,
+  },
+  reviewSummary: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5f5f5f',
+    marginBottom: 12,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 32,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    textAlign: 'center',
+  },
+  infoContainer: {
+    padding: 16,
+  },
+  infoSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  infoSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  cartFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: 16,
+    paddingBottom: 32,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  cartInfo: {},
+  cartItemCount: {
+    fontSize: 13,
+    color: '#5f5f5f',
+  },
+  cartTotal: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#151515',
+  },
+});

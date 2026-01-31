@@ -1,11 +1,13 @@
 /**
  * Profile Screen - User profile and settings
  */
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { useAuthStore } from '@/store';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@/navigation/types';
+import { useAuthStore, useFavoritesStore } from '@/store';
 
 interface MenuItemProps {
   icon: string;
@@ -20,9 +22,7 @@ function MenuItem({ icon, title, subtitle, onPress, danger }: MenuItemProps) {
     <TouchableOpacity style={styles.menuItem} onPress={onPress}>
       <Text style={styles.menuIcon}>{icon}</Text>
       <View style={styles.menuContent}>
-        <Text style={[styles.menuTitle, danger && styles.menuTitleDanger]}>
-          {title}
-        </Text>
+        <Text style={[styles.menuTitle, danger && styles.menuTitleDanger]}>{title}</Text>
         {subtitle && <Text style={styles.menuSubtitle}>{subtitle}</Text>}
       </View>
       <Text style={styles.menuArrow}>›</Text>
@@ -31,8 +31,13 @@ function MenuItem({ icon, title, subtitle, onPress, danger }: MenuItemProps) {
 }
 
 export default function ProfileScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, clearAuth } = useAuthStore();
+  const { favorites, loadFavorites } = useFavoritesStore();
+
+  useEffect(() => {
+    loadFavorites();
+  }, [loadFavorites]);
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -95,6 +100,46 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Favorites</Text>
+          {favorites.length === 0 ? (
+            <View style={styles.emptyFavorites}>
+              <Text style={styles.emptyFavoritesTitle}>No favorites yet</Text>
+              <Text style={styles.emptyFavoritesText}>
+                Tap the heart on a chef profile to save them here.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.favoritesList}
+            >
+              {favorites.map((chef) => (
+                <TouchableOpacity
+                  key={chef.id}
+                  style={styles.favoriteCard}
+                  onPress={() => navigation.navigate('ChefDetail', { chefId: chef.id })}
+                >
+                  <Image
+                    source={{ uri: chef.profileImageUrl || 'https://via.placeholder.com/120' }}
+                    style={styles.favoriteImage}
+                  />
+                  <Text style={styles.favoriteName} numberOfLines={1}>
+                    {chef.businessName}
+                  </Text>
+                  <Text style={styles.favoriteCuisine} numberOfLines={1}>
+                    {chef.cuisineTypes.join(' • ')}
+                  </Text>
+                  <Text style={styles.favoriteMeta}>
+                    ⭐ {chef.rating.toFixed(1)} • {chef.averagePrepTime}m
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Preferences</Text>
           <View style={styles.menuGroup}>
             <MenuItem
@@ -115,32 +160,15 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
           <View style={styles.menuGroup}>
-            <MenuItem
-              icon="❓"
-              title="Help Center"
-              onPress={() => {}}
-            />
-            <MenuItem
-              icon="📧"
-              title="Contact Us"
-              onPress={() => {}}
-            />
-            <MenuItem
-              icon="📄"
-              title="Terms & Privacy"
-              onPress={() => {}}
-            />
+            <MenuItem icon="❓" title="Help Center" onPress={() => {}} />
+            <MenuItem icon="📧" title="Contact Us" onPress={() => {}} />
+            <MenuItem icon="📄" title="Terms & Privacy" onPress={() => {}} />
           </View>
         </View>
 
         <View style={styles.section}>
           <View style={styles.menuGroup}>
-            <MenuItem
-              icon="🚪"
-              title="Sign Out"
-              onPress={handleLogout}
-              danger
-            />
+            <MenuItem icon="🚪" title="Sign Out" onPress={handleLogout} danger />
           </View>
         </View>
 
@@ -211,6 +239,60 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     paddingHorizontal: 16,
     marginBottom: 8,
+  },
+  favoritesList: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  favoriteCard: {
+    width: 160,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  favoriteImage: {
+    width: '100%',
+    height: 90,
+    borderRadius: 12,
+    marginBottom: 10,
+    backgroundColor: '#f0f0f0',
+  },
+  favoriteName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#151515',
+  },
+  favoriteCuisine: {
+    fontSize: 12,
+    color: '#5f5f5f',
+    marginTop: 4,
+  },
+  favoriteMeta: {
+    fontSize: 12,
+    color: '#ff9800',
+    marginTop: 6,
+    fontWeight: '600',
+  },
+  emptyFavorites: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    borderRadius: 16,
+    padding: 16,
+  },
+  emptyFavoritesTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 6,
+  },
+  emptyFavoritesText: {
+    fontSize: 13,
+    color: '#5f5f5f',
   },
   menuGroup: {
     backgroundColor: '#fff',

@@ -1,0 +1,165 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+  ParseUUIDPipe,
+} from '@nestjs/common';
+import { ReviewsService } from './reviews.service';
+import {
+  CreateReviewDto,
+  UpdateReviewDto,
+  ModerateReviewDto,
+  ReviewQueryDto,
+  RevieweeType,
+} from './dto/review.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { JwtPayload, UserRole } from '../common/interfaces/user.interface';
+
+@Controller('reviews')
+export class ReviewsController {
+  constructor(private readonly reviewsService: ReviewsService) {}
+
+  /**
+   * POST /reviews
+   * Create a new review for a chef or driver
+   * Requires authentication (customer role)
+   * Validates:
+   * - User placed the order
+   * - Order is delivered
+   * - No duplicate review
+   */
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  async create(@CurrentUser() user: JwtPayload, @Body() dto: CreateReviewDto) {
+    return this.reviewsService.createReview(user.sub, dto);
+  }
+
+  /**
+   * GET /reviews
+   * List all reviews with optional filters
+   * Query params: revieweeId, revieweeType, flagged, minRating, maxRating, page, perPage
+   * Admins can see hidden reviews
+   */
+  @Get()
+  async list(@Query() query: ReviewQueryDto, @CurrentUser() user?: JwtPayload) {
+    const isAdmin = user?.role === UserRole.ADMIN;
+    return this.reviewsService.listReviews(query, isAdmin);
+  }
+
+  /**
+   * GET /reviews/stats/:revieweeId
+   * Get rating statistics for a chef or driver
+   */
+  @Get('stats/:revieweeId')
+  async getStats(
+    @Param('revieweeId', ParseUUIDPipe) revieweeId: string,
+    @Query('revieweeType') revieweeType: RevieweeType,
+  ) {
+    return this.reviewsService.getRatingStats(revieweeId, revieweeType || 'chef');
+  }
+
+  /**
+   * GET /reviews/chef/:chefId
+   * List reviews for a specific chef
+   */
+  @Get('chef/:chefId')
+  async listChefReviews(
+    @Param('chefId') chefId: string,
+    @Query() query: ReviewQueryDto,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    const isAdmin = user?.role === UserRole.ADMIN;
+    return this.reviewsService.listChefReviews(chefId, query, isAdmin);
+  }
+
+  /**
+   * GET /reviews/driver/:driverId
+   * List reviews for a specific driver
+   */
+  @Get('driver/:driverId')
+  async listDriverReviews(
+    @Param('driverId') driverId: string,
+    @Query() query: ReviewQueryDto,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    const isAdmin = user?.role === UserRole.ADMIN;
+    return this.reviewsService.listDriverReviews(driverId, query, isAdmin);
+  }
+
+  /**
+   * GET /reviews/order/:orderId
+   * List all reviews for a specific order
+   */
+  @Get('order/:orderId')
+  async listByOrder(@Param('orderId', ParseUUIDPipe) orderId: string) {
+    return this.reviewsService.listByOrder(orderId);
+  }
+
+  /**
+   * GET /reviews/:id
+   * Get a single review by ID with reviewer info
+   * Admins can see hidden reviews
+   */
+  @Get(':id')
+  async getById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    const isAdmin = user?.role === UserRole.ADMIN;
+    return this.reviewsService.getReviewById(id, isAdmin);
+  }
+
+  /**
+   * PATCH /reviews/:id
+   * Update a review (only by the original reviewer)
+   * Can update rating and/or comment
+   */
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateReviewDto,
+  ) {
+    return this.reviewsService.updateReview(id, user.sub, dto);
+  }
+
+  /**
+   * PATCH /reviews/:id/moderate
+   * Moderate a review (admin only)
+   * Actions: flag, unflag, hide, unhide
+   */
+  @Patch(':id/moderate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async moderate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: ModerateReviewDto,
+  ) {
+    return this.reviewsService.moderateReview(id, user.sub, dto);
+  }
+
+  /**
+   * DELETE /reviews/:id
+   * Delete a review permanently (admin only)
+   */
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async delete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.reviewsService.deleteReview(id, user.sub);
+  }
+}

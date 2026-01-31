@@ -8,10 +8,11 @@ import {
   Percent,
   Clock,
   MapPin,
-  Bell,
   Shield,
   Save,
   AlertCircle,
+  CheckCircle,
+  RotateCcw,
 } from 'lucide-react';
 
 interface PlatformSettings {
@@ -19,6 +20,9 @@ interface PlatformSettings {
   chef_commission_rate: number;
   driver_commission_rate: number;
   platform_fee_rate: number;
+
+  // Tax Settings
+  tax_rate: number;
 
   // Delivery Settings
   min_delivery_fee: number;
@@ -41,43 +45,59 @@ interface PlatformSettings {
   new_registrations_enabled: boolean;
 }
 
+const defaultSettings: PlatformSettings = {
+  chef_commission_rate: 15,
+  driver_commission_rate: 85,
+  platform_fee_rate: 0,
+
+  tax_rate: 13,
+
+  min_delivery_fee: 299,
+  max_delivery_fee: 999,
+  base_delivery_fee: 299,
+  per_km_rate: 50,
+  max_delivery_radius_km: 15,
+
+  min_order_amount: 1500,
+  max_prep_time_minutes: 60,
+  order_timeout_minutes: 5,
+
+  min_driver_rating: 4.0,
+  max_concurrent_deliveries: 3,
+
+  maintenance_mode: false,
+  new_registrations_enabled: true,
+};
+
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<PlatformSettings>({
-    chef_commission_rate: 15,
-    driver_commission_rate: 85,
-    platform_fee_rate: 0,
-
-    min_delivery_fee: 299,
-    max_delivery_fee: 999,
-    base_delivery_fee: 299,
-    per_km_rate: 50,
-    max_delivery_radius_km: 15,
-
-    min_order_amount: 1500,
-    max_prep_time_minutes: 60,
-    order_timeout_minutes: 5,
-
-    min_driver_rating: 4.0,
-    max_concurrent_deliveries: 3,
-
-    maintenance_mode: false,
-    new_registrations_enabled: true,
-  });
+  const [settings, setSettings] = useState<PlatformSettings>(defaultSettings);
+  const [originalSettings, setOriginalSettings] = useState<PlatformSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     fetchSettings();
   }, []);
+
+  useEffect(() => {
+    // Check if settings have changed from original
+    const changed = JSON.stringify(settings) !== JSON.stringify(originalSettings);
+    setHasChanges(changed);
+  }, [settings, originalSettings]);
 
   const fetchSettings = async () => {
     setLoading(true);
     try {
       const data = await api.getSettings();
       setSettings(data.settings);
+      setOriginalSettings(data.settings);
     } catch (error) {
       console.error('Failed to fetch settings:', error);
+      // Use default settings for demo
+      setSettings(defaultSettings);
+      setOriginalSettings(defaultSettings);
     } finally {
       setLoading(false);
     }
@@ -88,20 +108,26 @@ export default function SettingsPage() {
     setSaved(false);
     try {
       await api.updateSettings(settings);
+      setOriginalSettings(settings);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
       console.error('Failed to save settings:', error);
+      alert('Failed to save settings. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  const updateSetting = (key: keyof PlatformSettings, value: any) => {
-    setSettings((prev) => ({ ...prev, [key]: value }));
+  const handleReset = () => {
+    if (confirm('Are you sure you want to discard all changes?')) {
+      setSettings(originalSettings);
+    }
   };
 
-  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const updateSetting = (key: keyof PlatformSettings, value: number | boolean) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+  };
 
   if (loading) {
     return (
@@ -120,20 +146,40 @@ export default function SettingsPage() {
             Configure platform-wide settings
           </p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Save className="w-4 h-4" />
-          {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
-        </button>
+        <div className="flex items-center gap-3">
+          {hasChanges && (
+            <button
+              type="button"
+              onClick={handleReset}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Discard Changes
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !hasChanges}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Save className="w-4 h-4" />
+            {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
+          </button>
+        </div>
       </div>
 
       {saved && (
         <div className="flex items-center gap-2 p-4 rounded-xl bg-emerald-50 text-emerald-700">
-          <AlertCircle className="w-5 h-5" />
+          <CheckCircle className="w-5 h-5" />
           Settings saved successfully!
+        </div>
+      )}
+
+      {hasChanges && !saved && (
+        <div className="flex items-center gap-2 p-4 rounded-xl bg-amber-50 text-amber-700">
+          <AlertCircle className="w-5 h-5" />
+          You have unsaved changes.
         </div>
       )}
 
@@ -190,6 +236,26 @@ export default function SettingsPage() {
               <p className="text-xs text-muted mt-1">
                 Drivers receive {settings.driver_commission_rate}% of delivery
                 fees
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">
+                Tax Rate (%)
+              </label>
+              <input
+                type="number"
+                value={settings.tax_rate}
+                onChange={(e) =>
+                  updateSetting('tax_rate', Number(e.target.value))
+                }
+                min={0}
+                max={100}
+                step="0.1"
+                className="input"
+              />
+              <p className="text-xs text-muted mt-1">
+                Applied to order subtotals (currently {settings.tax_rate}%)
               </p>
             </div>
           </div>
@@ -253,6 +319,30 @@ export default function SettingsPage() {
 
             <div>
               <label className="block text-sm font-medium text-ink mb-1">
+                Base Delivery Fee
+              </label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                <input
+                  type="number"
+                  value={(settings.base_delivery_fee / 100).toFixed(2)}
+                  onChange={(e) =>
+                    updateSetting(
+                      'base_delivery_fee',
+                      Math.round(Number(e.target.value) * 100)
+                    )
+                  }
+                  step="0.01"
+                  className="input pl-8"
+                />
+              </div>
+              <p className="text-xs text-muted mt-1">
+                Starting fee before distance calculation
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">
                 Per KM Rate (cents)
               </label>
               <input
@@ -263,6 +353,9 @@ export default function SettingsPage() {
                 }
                 className="input"
               />
+              <p className="text-xs text-muted mt-1">
+                ${(settings.per_km_rate / 100).toFixed(2)} per kilometer
+              </p>
             </div>
 
             <div>
@@ -277,6 +370,9 @@ export default function SettingsPage() {
                 }
                 className="input"
               />
+              <p className="text-xs text-muted mt-1">
+                Maximum distance for deliveries
+              </p>
             </div>
           </div>
         </div>
@@ -313,6 +409,9 @@ export default function SettingsPage() {
                   className="input pl-8"
                 />
               </div>
+              <p className="text-xs text-muted mt-1">
+                Customers must order at least ${(settings.min_order_amount / 100).toFixed(2)}
+              </p>
             </div>
 
             <div>
@@ -327,6 +426,9 @@ export default function SettingsPage() {
                 }
                 className="input"
               />
+              <p className="text-xs text-muted mt-1">
+                Maximum preparation time allowed for orders
+              </p>
             </div>
 
             <div>
@@ -398,6 +500,9 @@ export default function SettingsPage() {
                 max={10}
                 className="input"
               />
+              <p className="text-xs text-muted mt-1">
+                Maximum orders a driver can handle at once
+              </p>
             </div>
           </div>
         </div>
@@ -455,6 +560,18 @@ export default function SettingsPage() {
               </label>
             </div>
           </div>
+
+          {settings.maintenance_mode && (
+            <div className="mt-4 p-4 bg-red-50 rounded-xl">
+              <div className="flex items-center gap-2 text-red-700">
+                <AlertCircle className="w-5 h-5" />
+                <span className="font-medium">Warning: Maintenance mode is enabled</span>
+              </div>
+              <p className="text-sm text-red-600 mt-1">
+                The platform is currently in maintenance mode. All operations are disabled for users.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

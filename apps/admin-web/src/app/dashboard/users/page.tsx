@@ -7,13 +7,18 @@ import {
   Search,
   Eye,
   Ban,
+  CheckCircle,
   Mail,
   Phone,
   Calendar,
-  MoreVertical,
   ChefHat,
   Truck,
   User,
+  X,
+  ShoppingBag,
+  DollarSign,
+  MapPin,
+  Shield,
 } from 'lucide-react';
 
 interface UserAccount {
@@ -27,6 +32,8 @@ interface UserAccount {
   created_at: string;
   total_orders?: number;
   total_spent?: number;
+  address?: string;
+  last_login?: string;
 }
 
 export default function UsersPage() {
@@ -36,6 +43,9 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [selectedUser, setSelectedUser] = useState<UserAccount | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -66,6 +76,8 @@ export default function UsersPage() {
           created_at: '2024-01-15T10:00:00Z',
           total_orders: 12,
           total_spent: 34500,
+          address: '123 Main St, Hamilton, ON',
+          last_login: '2024-01-20T14:30:00Z',
         },
         {
           id: '2',
@@ -77,6 +89,8 @@ export default function UsersPage() {
           is_active: true,
           created_at: '2024-01-10T10:00:00Z',
           total_orders: 156,
+          address: '456 Oak Ave, Burlington, ON',
+          last_login: '2024-01-20T09:15:00Z',
         },
         {
           id: '3',
@@ -87,6 +101,34 @@ export default function UsersPage() {
           role: 'driver',
           is_active: true,
           created_at: '2024-01-12T10:00:00Z',
+          total_orders: 245,
+          address: '789 Pine Rd, Oakville, ON',
+          last_login: '2024-01-20T12:45:00Z',
+        },
+        {
+          id: '4',
+          email: 'suspended@example.com',
+          phone: '+1 234-567-8903',
+          first_name: 'Sarah',
+          last_name: 'Wilson',
+          role: 'customer',
+          is_active: false,
+          created_at: '2024-01-05T10:00:00Z',
+          total_orders: 3,
+          total_spent: 8500,
+          address: '321 Elm St, Toronto, ON',
+          last_login: '2024-01-10T16:20:00Z',
+        },
+        {
+          id: '5',
+          email: 'admin@ridendine.com',
+          phone: '+1 234-567-8904',
+          first_name: 'Admin',
+          last_name: 'User',
+          role: 'admin',
+          is_active: true,
+          created_at: '2023-12-01T10:00:00Z',
+          last_login: '2024-01-20T08:00:00Z',
         },
       ]);
       setTotal(250);
@@ -95,14 +137,40 @@ export default function UsersPage() {
     }
   };
 
+  const handleSearch = () => {
+    setPage(1);
+    fetchUsers();
+  };
+
   const handleSuspend = async (userId: string) => {
     if (!confirm('Are you sure you want to suspend this user?')) return;
+    setActionLoading(true);
     try {
       await api.suspendUser(userId);
       fetchUsers();
     } catch (error) {
       console.error('Failed to suspend user:', error);
+    } finally {
+      setActionLoading(false);
     }
+  };
+
+  const handleActivate = async (userId: string) => {
+    if (!confirm('Are you sure you want to activate this user?')) return;
+    setActionLoading(true);
+    try {
+      await api.activateUser(userId);
+      fetchUsers();
+    } catch (error) {
+      console.error('Failed to activate user:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleViewDetails = (user: UserAccount) => {
+    setSelectedUser(user);
+    setShowDetailModal(true);
   };
 
   const filteredUsers = users.filter((user) => {
@@ -120,6 +188,8 @@ export default function UsersPage() {
         return <ChefHat className="w-4 h-4" />;
       case 'driver':
         return <Truck className="w-4 h-4" />;
+      case 'admin':
+        return <Shield className="w-4 h-4" />;
       default:
         return <User className="w-4 h-4" />;
     }
@@ -144,6 +214,24 @@ export default function UsersPage() {
       currency: 'USD',
     }).format(cents / 100);
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -166,14 +254,19 @@ export default function UsersPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Search by name or email..."
             className="input pl-10"
           />
         </div>
         <select
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={(e) => {
+            setFilter(e.target.value);
+            setPage(1);
+          }}
           className="input w-full sm:w-48"
+          aria-label="Filter by role"
         >
           <option value="all">All Roles</option>
           <option value="customer">Customers</option>
@@ -181,6 +274,9 @@ export default function UsersPage() {
           <option value="driver">Drivers</option>
           <option value="admin">Admins</option>
         </select>
+        <button type="button" onClick={handleSearch} className="btn-primary">
+          Search
+        </button>
       </div>
 
       {/* Stats */}
@@ -254,8 +350,8 @@ export default function UsersPage() {
                   <th className="table-header">User</th>
                   <th className="table-header">Contact</th>
                   <th className="table-header">Role</th>
-                  <th className="table-header">Activity</th>
                   <th className="table-header">Status</th>
+                  <th className="table-header">Created</th>
                   <th className="table-header">Actions</th>
                 </tr>
               </thead>
@@ -272,10 +368,7 @@ export default function UsersPage() {
                           <p className="font-medium text-ink">
                             {user.first_name} {user.last_name}
                           </p>
-                          <div className="flex items-center gap-1 text-xs text-muted">
-                            <Calendar className="w-3 h-3" />
-                            Joined {new Date(user.created_at).toLocaleDateString()}
-                          </div>
+                          <p className="text-xs text-muted">{user.email}</p>
                         </div>
                       </div>
                     </td>
@@ -302,20 +395,6 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="table-cell">
-                      <div className="space-y-1">
-                        {user.total_orders !== undefined && (
-                          <p className="text-sm">
-                            {user.total_orders} orders
-                          </p>
-                        )}
-                        {user.total_spent !== undefined && (
-                          <p className="text-xs text-muted">
-                            {formatCurrency(user.total_spent)} spent
-                          </p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="table-cell">
                       <span
                         className={`badge ${
                           user.is_active ? 'badge-approved' : 'badge-rejected'
@@ -325,21 +404,45 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="table-cell">
+                      <div className="flex items-center gap-1 text-xs text-muted">
+                        <Calendar className="w-3 h-3" />
+                        {formatDate(user.created_at)}
+                      </div>
+                    </td>
+                    <td className="table-cell">
                       <div className="flex items-center gap-2">
                         <button
+                          type="button"
+                          onClick={() => handleViewDetails(user)}
                           className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                           title="View Profile"
                         >
                           <Eye className="w-4 h-4 text-muted" />
                         </button>
-                        {user.is_active && user.role !== 'admin' && (
-                          <button
-                            onClick={() => handleSuspend(user.id)}
-                            className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-                            title="Suspend User"
-                          >
-                            <Ban className="w-4 h-4 text-red-600" />
-                          </button>
+                        {user.role !== 'admin' && (
+                          <>
+                            {user.is_active ? (
+                              <button
+                                type="button"
+                                onClick={() => handleSuspend(user.id)}
+                                disabled={actionLoading}
+                                className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                                title="Suspend User"
+                              >
+                                <Ban className="w-4 h-4 text-red-600" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleActivate(user.id)}
+                                disabled={actionLoading}
+                                className="p-2 hover:bg-emerald-100 rounded-lg transition-colors"
+                                title="Activate User"
+                              >
+                                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
@@ -359,6 +462,7 @@ export default function UsersPage() {
             </p>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
                 className="btn-secondary text-sm"
@@ -366,6 +470,7 @@ export default function UsersPage() {
                 Previous
               </button>
               <button
+                type="button"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page * 20 >= total}
                 className="btn-secondary text-sm"
@@ -376,6 +481,168 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+
+      {/* User Detail Modal */}
+      {showDetailModal && selectedUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-100 p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center text-xl font-bold text-muted">
+                  {selectedUser.first_name[0]}
+                  {selectedUser.last_name[0]}
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-ink">
+                    {selectedUser.first_name} {selectedUser.last_name}
+                  </h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold ${getRoleColor(
+                        selectedUser.role
+                      )}`}
+                    >
+                      {getRoleIcon(selectedUser.role)}
+                      {selectedUser.role}
+                    </span>
+                    <span
+                      className={`badge text-xs ${
+                        selectedUser.is_active ? 'badge-approved' : 'badge-rejected'
+                      }`}
+                    >
+                      {selectedUser.is_active ? 'Active' : 'Suspended'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDetailModal(false);
+                  setSelectedUser(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+                title="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Contact Information */}
+              <div>
+                <h4 className="font-semibold text-ink mb-3">Contact Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                    <Mail className="w-5 h-5 text-muted" />
+                    <div>
+                      <p className="text-xs text-muted">Email</p>
+                      <p className="font-medium">{selectedUser.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                    <Phone className="w-5 h-5 text-muted" />
+                    <div>
+                      <p className="text-xs text-muted">Phone</p>
+                      <p className="font-medium">{selectedUser.phone}</p>
+                    </div>
+                  </div>
+                  {selectedUser.address && (
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl md:col-span-2">
+                      <MapPin className="w-5 h-5 text-muted" />
+                      <div>
+                        <p className="text-xs text-muted">Address</p>
+                        <p className="font-medium">{selectedUser.address}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Activity Stats */}
+              <div>
+                <h4 className="font-semibold text-ink mb-3">Activity</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {selectedUser.total_orders !== undefined && (
+                    <div className="p-4 bg-blue-50 rounded-xl text-center">
+                      <ShoppingBag className="w-6 h-6 text-blue-600 mx-auto mb-2" />
+                      <p className="text-2xl font-bold text-blue-700">
+                        {selectedUser.total_orders}
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        {selectedUser.role === 'customer' ? 'Orders Placed' : 'Orders Completed'}
+                      </p>
+                    </div>
+                  )}
+                  {selectedUser.total_spent !== undefined && (
+                    <div className="p-4 bg-emerald-50 rounded-xl text-center">
+                      <DollarSign className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
+                      <p className="text-2xl font-bold text-emerald-700">
+                        {formatCurrency(selectedUser.total_spent)}
+                      </p>
+                      <p className="text-xs text-emerald-600">Total Spent</p>
+                    </div>
+                  )}
+                  <div className="p-4 bg-gray-50 rounded-xl text-center">
+                    <Calendar className="w-6 h-6 text-gray-600 mx-auto mb-2" />
+                    <p className="text-sm font-bold text-gray-700">
+                      {formatDate(selectedUser.created_at)}
+                    </p>
+                    <p className="text-xs text-gray-600">Joined</p>
+                  </div>
+                  {selectedUser.last_login && (
+                    <div className="p-4 bg-gray-50 rounded-xl text-center">
+                      <User className="w-6 h-6 text-gray-600 mx-auto mb-2" />
+                      <p className="text-sm font-bold text-gray-700">
+                        {formatDateTime(selectedUser.last_login)}
+                      </p>
+                      <p className="text-xs text-gray-600">Last Login</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              {selectedUser.role !== 'admin' && (
+                <div className="pt-4 border-t border-gray-100">
+                  <h4 className="font-semibold text-ink mb-3">Actions</h4>
+                  <div className="flex gap-3">
+                    {selectedUser.is_active ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleSuspend(selectedUser.id);
+                          setShowDetailModal(false);
+                        }}
+                        disabled={actionLoading}
+                        className="btn-danger flex items-center gap-2"
+                      >
+                        <Ban className="w-4 h-4" />
+                        Suspend User
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleActivate(selectedUser.id);
+                          setShowDetailModal(false);
+                        }}
+                        disabled={actionLoading}
+                        className="btn-primary flex items-center gap-2"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Activate User
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

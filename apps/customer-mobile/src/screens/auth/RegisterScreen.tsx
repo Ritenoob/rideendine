@@ -47,8 +47,7 @@ export default function RegisterScreen() {
     } else if (password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters';
     } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W])/.test(password)) {
-      newErrors.password =
-        'Must contain uppercase, lowercase, and number/special char';
+      newErrors.password = 'Must contain uppercase, lowercase, and number/special char';
     }
 
     if (password !== confirmPassword) {
@@ -75,13 +74,12 @@ export default function RegisterScreen() {
       Alert.alert(
         'Account Created',
         'Your account has been created successfully. Please sign in.',
-        [{ text: 'OK', onPress: () => navigation.navigate('Login' as never) }]
+        [{ text: 'OK', onPress: () => navigation.navigate('Login' as never) }],
       );
-    } catch (error: any) {
-      Alert.alert(
-        'Registration Failed',
-        error.message || 'Please try again with different information.'
-      );
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Please try again with different information.';
+      Alert.alert('Registration Failed', message);
     } finally {
       setLoading(false);
     }
@@ -97,18 +95,13 @@ export default function RegisterScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
 
           <View style={styles.header}>
             <Text style={styles.title}>Create account</Text>
-            <Text style={styles.subtitle}>
-              Join RideNDine to discover amazing home chefs
-            </Text>
+            <Text style={styles.subtitle}>Join RideNDine to discover amazing home chefs</Text>
           </View>
 
           <View style={styles.form}>
@@ -189,9 +182,7 @@ export default function RegisterScreen() {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Login' as never)}
-            >
+            <TouchableOpacity onPress={() => navigation.navigate('Login' as never)}>
               <Text style={styles.footerLink}>Sign in</Text>
             </TouchableOpacity>
           </View>

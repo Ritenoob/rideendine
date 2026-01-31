@@ -1,0 +1,269 @@
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+  IsNumber,
+  IsBoolean,
+  IsObject,
+  Min,
+  Max,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+// =============================================================================
+// Chef DTOs
+// =============================================================================
+
+export class VerifyChefDto {
+  @IsEnum(['approved', 'rejected'])
+  verification_status!: 'approved' | 'rejected';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  rejection_reason?: string;
+}
+
+export class RejectChefDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
+
+// =============================================================================
+// Pagination & Query DTOs
+// =============================================================================
+
+export class PaginationQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  perPage?: number;
+}
+
+export class UsersQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+
+export class ChefsQueryDto {
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+
+export class DriversQueryDto {
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+
+export class OrdersQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+
+export class ReviewsQueryDto {
+  @IsOptional()
+  @IsEnum(['chef', 'driver'])
+  revieweeType?: 'chef' | 'driver';
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  flagged?: boolean;
+}
+
+export class PayoutsQueryDto {
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
+
+// =============================================================================
+// User Management DTOs
+// =============================================================================
+
+export class UpdateUserDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  first_name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  last_name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  phone?: string;
+
+  @IsOptional()
+  @IsEnum(['customer', 'chef', 'driver', 'admin'])
+  role?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  is_verified?: boolean;
+}
+
+// =============================================================================
+// Driver Approval DTOs
+// =============================================================================
+
+export class RejectDriverDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
+
+// =============================================================================
+// Order Management DTOs
+// =============================================================================
+
+export class RefundOrderDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
+
+// =============================================================================
+// Commission DTOs
+// =============================================================================
+
+export class CommissionQueryDto {
+  @IsOptional()
+  @IsEnum(['day', 'week', 'month', 'year'])
+  period?: 'day' | 'week' | 'month' | 'year';
+}
+
+// =============================================================================
+// Settings DTOs
+// =============================================================================
+
+export class UpdateSettingsDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
+  platform_fee_percent?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  delivery_fee_base_cents?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  delivery_fee_per_km_cents?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  minimum_order_cents?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
+  tax_rate_percent?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  maintenance_mode?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  new_chef_signups_enabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  new_driver_signups_enabled?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  operating_hours?: Record<string, { open: string; close: string }>;
+}
+
+// =============================================================================
+// Review Moderation DTOs
+// =============================================================================
+
+export class RemoveReviewDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
+
+// =============================================================================
+// Response Interfaces (for type safety)
+// =============================================================================
+
+export interface DashboardStatsResponse {
+  totalOrders: number;
+  activeOrders: number;
+  totalRevenue: number;
+  totalCommission: number;
+  pendingChefs: number;
+  pendingDrivers: number;
+  activeDrivers: number;
+  totalUsers: number;
+}
+
+export interface ActivityItem {
+  id: string;
+  type: 'order' | 'chef_signup' | 'driver_signup' | 'review' | 'refund';
+  message: string;
+  timestamp: Date;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CommissionStatsResponse {
+  totalRevenue: number;
+  totalCommission: number;
+  orderCount: number;
+  avgOrderValue: number;
+  byDate: { date: string; revenue: number; commission: number }[];
+}

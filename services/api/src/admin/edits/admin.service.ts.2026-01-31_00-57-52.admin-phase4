@@ -1,0 +1,1020 @@
+import { Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Pool } from 'pg';
+import {
+  DashboardStatsResponse,
+  ActivityItem,
+  CommissionStatsResponse,
+  UpdateUserDto,
+  UpdateSettingsDto,
+} from './dto/admin.dto';
+
+@Injectable()
+export class AdminService {
+  constructor(@Inject('DATABASE_POOL') private db: Pool) {}
+
+  // ===========================================================================
+  // Dashboard
+  // ===========================================================================
+
+  async getDashboardStats(): Promise<DashboardStatsResponse> {
+    // Run all queries in parallel for performance
+    const [
+      ordersResult,
+      activeOrdersResult,
+      revenueResult,
+      pendingChefsResult,
+      pendingDriversResult,
+      activeDriversResult,
+      totalUsersResult,
+    ] = await Promise.all([
+      // Total orders
+      this.db.query('SELECT COUNT(*) as count FROM orders'),
+      // Active orders (not delivered, cancelled, or refunded)
+      this.db.query(`
+        SELECT COUNT(*) as count FROM orders
+        WHERE status NOT IN ('delivered', 'cancelled', 'refunded')
+      `),
+      // Revenue and commission from completed orders
+      this.db.query(`
+        SELECT
+          COALESCE(SUM(total_cents), 0) as total_revenue,
+          COALESCE(SUM(platform_fee_cents), 0) as total_commission
+        FROM orders
+        WHERE status = 'delivered'
+      `),
+      // Pending chefs
+      this.db.query(`
+        SELECT COUNT(*) as count FROM chefs
+        WHERE verification_status = 'pending'
+      `),
+      // Pending drivers (drivers with no deliveries yet, approximation for pending)
+      this.db.query(`
+        SELECT COUNT(*) as count FROM drivers
+        WHERE total_deliveries = 0 AND is_available = FALSE
+      `),
+      // Active drivers
+      this.db.query(`
+        SELECT COUNT(*) as count FROM drivers
+        WHERE is_available = TRUE
+      `),
+      // Total users
+      this.db.query('SELECT COUNT(*) as count FROM users'),
+    ]);
+
+    return {
+      totalOrders: parseInt(ordersResult.rows[0].count, 10),
+      activeOrders: parseInt(activeOrdersResult.rows[0].count, 10),
+      totalRevenue: parseInt(revenueResult.rows[0].total_revenue, 10),
+      totalCommission: parseInt(revenueResult.rows[0].total_commission, 10),
+      pendingChefs: parseInt(pendingChefsResult.rows[0].count, 10),
+      pendingDrivers: parseInt(pendingDriversResult.rows[0].count, 10),
+      activeDrivers: parseInt(activeDriversResult.rows[0].count, 10),
+      totalUsers: parseInt(totalUsersResult.rows[0].count, 10),
+    };
+  }
+
+  async getRecentActivity(): Promise<{ activities: ActivityItem[] }> {
+    // Fetch recent activities from various sources
+    const activities: ActivityItem[] = [];
+
+    // Recent orders
+    const ordersResult = await this.db.query(`
+      SELECT o.id, o.order_number, o.status, o.total_cents, o.created_at,
+             u.email as customer_email
+      FROM orders o
+      LEFT JOIN customers c ON o.customer_id = c.id
+      LEFT JOIN users u ON c.user_id = u.id
+      ORDER BY o.created_at DESC
+      LIMIT 10
+    `);
+
+    for (const order of ordersResult.rows) {
+      activities.push({
+        id: order.id,
+        type: 'order',
+        message: `New order #${order.order_number} - $${(order.total_cents / 100).toFixed(2)}`,
+        timestamp: order.created_at,
+        metadata: { orderNumber: order.order_number, status: order.status },
+      });
+    }
+
+    // Recent chef signups
+    const chefsResult = await this.db.query(`
+      SELECT c.id, c.business_name, c.created_at, u.email
+      FROM chefs c
+      JOIN users u ON c.user_id = u.id
+      ORDER BY c.created_at DESC
+      LIMIT 5
+    `);
+
+    for (const chef of chefsResult.rows) {
+      activities.push({
+        id: chef.id,
+        type: 'chef_signup',
+        message: `New chef signup: ${chef.business_name || chef.email}`,
+        timestamp: chef.created_at,
+        metadata: { businessName: chef.business_name, email: chef.email },
+      });
+    }
+
+    // Recent driver signups
+    const driversResult = await this.db.query(`
+      SELECT d.id, d.created_at, u.email
+      FROM drivers d
+      JOIN users u ON d.user_id = u.id
+      ORDER BY d.created_at DESC
+      LIMIT 5
+    `);
+
+    for (const driver of driversResult.rows) {
+      activities.push({
+        id: driver.id,
+        type: 'driver_signup',
+        message: `New driver signup: ${driver.email}`,
+        timestamp: driver.created_at,
+        metadata: { email: driver.email },
+      });
+    }
+
+    // Recent reviews
+    const reviewsResult = await this.db.query(`
+      SELECT r.id, r.rating, r.reviewee_type, r.created_at,
+             u.email as reviewer_email
+      FROM reviews r
+      JOIN users u ON r.reviewer_id = u.id
+      ORDER BY r.created_at DESC
+      LIMIT 5
+    `);
+
+    for (const review of reviewsResult.rows) {
+      activities.push({
+        id: review.id,
+        type: 'review',
+        message: `New ${review.rating}-star ${review.reviewee_type} review`,
+        timestamp: review.created_at,
+        metadata: { rating: review.rating, revieweeType: review.reviewee_type },
+      });
+    }
+
+    // Sort all activities by timestamp (most recent first)
+    activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    return { activities: activities.slice(0, 20) };
+  }
+
+  // ===========================================================================
+  // User Management
+  // ===========================================================================
+
+  async listUsers(params: { role?: string; search?: string; page?: number; perPage?: number }) {
+    const page = params.page || 1;
+    const perPage = params.perPage || 20;
+    const offset = (page - 1) * perPage;
+
+    const conditions: string[] = [];
+    const values: (string | number)[] = [];
+    let paramIndex = 1;
+
+    if (params.role) {
+      conditions.push(`u.role = $${paramIndex++}`);
+      values.push(params.role);
+    }
+
+    if (params.search) {
+      conditions.push(`(u.email ILIKE $${paramIndex} OR p.first_name ILIKE $${paramIndex} OR p.last_name ILIKE $${paramIndex})`);
+      values.push(`%${params.search}%`);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Get total count
+    const countResult = await this.db.query(
+      `SELECT COUNT(*) as count FROM users u
+       LEFT JOIN user_profiles p ON u.id = p.user_id
+       ${whereClause}`,
+      values,
+    );
+    const total = parseInt(countResult.rows[0].count, 10);
+
+    // Get paginated users
+    const usersResult = await this.db.query(
+      `SELECT u.id, u.email, u.role, u.is_verified, u.created_at,
+              p.first_name, p.last_name, p.phone, p.avatar_url
+       FROM users u
+       LEFT JOIN user_profiles p ON u.id = p.user_id
+       ${whereClause}
+       ORDER BY u.created_at DESC
+       LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+      [...values, perPage, offset],
+    );
+
+    return { users: usersResult.rows, total };
+  }
+
+  async updateUser(userId: string, data: UpdateUserDto) {
+    // Verify user exists
+    const userCheck = await this.db.query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userCheck.rows.length === 0) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Update user table if role or is_verified changed
+    if (data.role !== undefined || data.is_verified !== undefined) {
+      const userUpdates: string[] = [];
+      const userValues: (string | boolean)[] = [];
+      let paramIndex = 1;
+
+      if (data.role !== undefined) {
+        userUpdates.push(`role = $${paramIndex++}`);
+        userValues.push(data.role);
+      }
+      if (data.is_verified !== undefined) {
+        userUpdates.push(`is_verified = $${paramIndex++}`);
+        userValues.push(data.is_verified);
+      }
+
+      if (userUpdates.length > 0) {
+        userValues.push(userId);
+        await this.db.query(
+          `UPDATE users SET ${userUpdates.join(', ')}, updated_at = NOW()
+           WHERE id = $${paramIndex}`,
+          userValues,
+        );
+      }
+    }
+
+    // Update profile if profile fields changed
+    if (data.first_name !== undefined || data.last_name !== undefined || data.phone !== undefined) {
+      // Check if profile exists
+      const profileCheck = await this.db.query(
+        'SELECT id FROM user_profiles WHERE user_id = $1',
+        [userId],
+      );
+
+      if (profileCheck.rows.length === 0) {
+        // Create profile
+        await this.db.query(
+          `INSERT INTO user_profiles (user_id, first_name, last_name, phone)
+           VALUES ($1, $2, $3, $4)`,
+          [userId, data.first_name || null, data.last_name || null, data.phone || null],
+        );
+      } else {
+        // Update profile
+        const profileUpdates: string[] = [];
+        const profileValues: (string | null)[] = [];
+        let paramIndex = 1;
+
+        if (data.first_name !== undefined) {
+          profileUpdates.push(`first_name = $${paramIndex++}`);
+          profileValues.push(data.first_name);
+        }
+        if (data.last_name !== undefined) {
+          profileUpdates.push(`last_name = $${paramIndex++}`);
+          profileValues.push(data.last_name);
+        }
+        if (data.phone !== undefined) {
+          profileUpdates.push(`phone = $${paramIndex++}`);
+          profileValues.push(data.phone);
+        }
+
+        if (profileUpdates.length > 0) {
+          profileValues.push(userId);
+          await this.db.query(
+            `UPDATE user_profiles SET ${profileUpdates.join(', ')}, updated_at = NOW()
+             WHERE user_id = $${paramIndex}`,
+            profileValues,
+          );
+        }
+      }
+    }
+
+    // Fetch and return updated user
+    const result = await this.db.query(
+      `SELECT u.id, u.email, u.role, u.is_verified, u.created_at,
+              p.first_name, p.last_name, p.phone, p.avatar_url
+       FROM users u
+       LEFT JOIN user_profiles p ON u.id = p.user_id
+       WHERE u.id = $1`,
+      [userId],
+    );
+
+    return { user: result.rows[0] };
+  }
+
+  async suspendUser(userId: string) {
+    // Verify user exists
+    const userCheck = await this.db.query('SELECT id, role FROM users WHERE id = $1', [userId]);
+    if (userCheck.rows.length === 0) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Set is_verified to false to effectively suspend the user
+    await this.db.query(
+      'UPDATE users SET is_verified = FALSE, updated_at = NOW() WHERE id = $1',
+      [userId],
+    );
+
+    // If the user is a chef, deactivate their chef profile
+    if (userCheck.rows[0].role === 'chef') {
+      await this.db.query(
+        'UPDATE chefs SET is_active = FALSE, is_accepting_orders = FALSE, updated_at = NOW() WHERE user_id = $1',
+        [userId],
+      );
+    }
+
+    // If the user is a driver, set them as unavailable
+    if (userCheck.rows[0].role === 'driver') {
+      await this.db.query(
+        'UPDATE drivers SET is_available = FALSE, updated_at = NOW() WHERE user_id = $1',
+        [userId],
+      );
+    }
+
+    return { success: true, message: `User ${userId} has been suspended` };
+  }
+
+  // ===========================================================================
+  // Chef Management
+  // ===========================================================================
+
+  async listChefs(status?: string, search?: string) {
+    const conditions: string[] = [];
+    const values: string[] = [];
+    let paramIndex = 1;
+
+    if (status) {
+      conditions.push(`c.verification_status = $${paramIndex++}`);
+      values.push(status);
+    }
+
+    if (search) {
+      conditions.push(`(c.business_name ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`);
+      values.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT c.id, c.business_name, c.verification_status, c.rating, c.address,
+             c.total_orders, c.is_active, c.is_accepting_orders, c.created_at,
+             u.email
+      FROM chefs c
+      JOIN users u ON c.user_id = u.id
+      ${whereClause}
+      ORDER BY c.created_at DESC
+      LIMIT 200
+    `;
+
+    const result = await this.db.query(sql, values);
+    return { chefs: result.rows };
+  }
+
+  async getChefDetails(chefId: string) {
+    const result = await this.db.query(
+      `SELECT c.*, u.email, u.is_verified as user_verified,
+              p.first_name, p.last_name, p.phone
+       FROM chefs c
+       JOIN users u ON c.user_id = u.id
+       LEFT JOIN user_profiles p ON u.id = p.user_id
+       WHERE c.id = $1`,
+      [chefId],
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException(`Chef with ID ${chefId} not found`);
+    }
+
+    // Get chef documents
+    const docsResult = await this.db.query(
+      `SELECT id, document_type, file_url, status, uploaded_at
+       FROM chef_documents
+       WHERE chef_id = $1
+       ORDER BY uploaded_at DESC`,
+      [chefId],
+    );
+
+    return {
+      chef: {
+        ...result.rows[0],
+        documents: docsResult.rows,
+      },
+    };
+  }
+
+  async updateChefStatus(chefId: string, status: 'approved' | 'rejected', reason?: string) {
+    const result = await this.db.query(
+      'UPDATE chefs SET verification_status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, verification_status',
+      [status, chefId],
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException(`Chef with ID ${chefId} not found`);
+    }
+
+    // If approved, also set the user as verified
+    if (status === 'approved') {
+      await this.db.query(
+        `UPDATE users SET is_verified = TRUE, updated_at = NOW()
+         WHERE id = (SELECT user_id FROM chefs WHERE id = $1)`,
+        [chefId],
+      );
+    }
+
+    return { chef: result.rows[0], reason };
+  }
+
+  // ===========================================================================
+  // Driver Management
+  // ===========================================================================
+
+  async listDrivers(status?: string, search?: string) {
+    const conditions: string[] = [];
+    const values: (string | boolean)[] = [];
+    let paramIndex = 1;
+
+    if (status) {
+      if (status === 'active') {
+        conditions.push(`d.is_available = $${paramIndex++}`);
+        values.push(true);
+      } else if (status === 'inactive') {
+        conditions.push(`d.is_available = $${paramIndex++}`);
+        values.push(false);
+      } else if (status === 'pending') {
+        conditions.push(`d.total_deliveries = 0 AND d.is_available = FALSE`);
+      }
+    }
+
+    if (search) {
+      conditions.push(`u.email ILIKE $${paramIndex}`);
+      values.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT d.id, d.is_available, d.total_deliveries, d.rating,
+             d.vehicle_type, d.vehicle_plate, d.acceptance_rate, d.created_at,
+             u.email, u.is_verified,
+             p.first_name, p.last_name, p.phone
+      FROM drivers d
+      JOIN users u ON d.user_id = u.id
+      LEFT JOIN user_profiles p ON u.id = p.user_id
+      ${whereClause}
+      ORDER BY d.created_at DESC
+      LIMIT 200
+    `;
+
+    const result = await this.db.query(sql, values);
+    return { drivers: result.rows };
+  }
+
+  async approveDriver(driverId: string) {
+    // Verify driver exists
+    const driverCheck = await this.db.query(
+      'SELECT id, user_id FROM drivers WHERE id = $1',
+      [driverId],
+    );
+    if (driverCheck.rows.length === 0) {
+      throw new NotFoundException(`Driver with ID ${driverId} not found`);
+    }
+
+    // Set user as verified
+    await this.db.query(
+      'UPDATE users SET is_verified = TRUE, updated_at = NOW() WHERE id = $1',
+      [driverCheck.rows[0].user_id],
+    );
+
+    // Set driver as available (approved)
+    const result = await this.db.query(
+      'UPDATE drivers SET is_available = TRUE, updated_at = NOW() WHERE id = $1 RETURNING id, is_available',
+      [driverId],
+    );
+
+    return { driver: result.rows[0], status: 'approved' };
+  }
+
+  async rejectDriver(driverId: string, reason?: string) {
+    // Verify driver exists
+    const driverCheck = await this.db.query(
+      'SELECT id, user_id FROM drivers WHERE id = $1',
+      [driverId],
+    );
+    if (driverCheck.rows.length === 0) {
+      throw new NotFoundException(`Driver with ID ${driverId} not found`);
+    }
+
+    // Set user as not verified
+    await this.db.query(
+      'UPDATE users SET is_verified = FALSE, updated_at = NOW() WHERE id = $1',
+      [driverCheck.rows[0].user_id],
+    );
+
+    // Keep driver as unavailable
+    const result = await this.db.query(
+      'UPDATE drivers SET is_available = FALSE, updated_at = NOW() WHERE id = $1 RETURNING id, is_available',
+      [driverId],
+    );
+
+    return { driver: result.rows[0], status: 'rejected', reason };
+  }
+
+  // ===========================================================================
+  // Order Management
+  // ===========================================================================
+
+  async listOrders(params: { status?: string; search?: string; page?: number; perPage?: number }) {
+    const page = params.page || 1;
+    const perPage = params.perPage || 20;
+    const offset = (page - 1) * perPage;
+
+    const conditions: string[] = [];
+    const values: (string | number)[] = [];
+    let paramIndex = 1;
+
+    if (params.status) {
+      conditions.push(`o.status = $${paramIndex++}`);
+      values.push(params.status);
+    }
+
+    if (params.search) {
+      conditions.push(`o.order_number ILIKE $${paramIndex}`);
+      values.push(`%${params.search}%`);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Get total count
+    const countResult = await this.db.query(
+      `SELECT COUNT(*) as count FROM orders o ${whereClause}`,
+      values,
+    );
+    const total = parseInt(countResult.rows[0].count, 10);
+
+    // Get paginated orders
+    const ordersResult = await this.db.query(
+      `SELECT o.id, o.order_number, o.status, o.total_cents, o.subtotal_cents,
+              o.platform_fee_cents, o.delivery_fee_cents, o.created_at,
+              o.delivery_address, o.pickup_address,
+              cu.email as customer_email,
+              ch.business_name as chef_name,
+              du.email as driver_email
+       FROM orders o
+       LEFT JOIN customers c ON o.customer_id = c.id
+       LEFT JOIN users cu ON c.user_id = cu.id
+       LEFT JOIN chefs ch ON o.chef_id = ch.id
+       LEFT JOIN drivers d ON o.driver_id = d.id
+       LEFT JOIN users du ON d.user_id = du.id
+       ${whereClause}
+       ORDER BY o.created_at DESC
+       LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+      [...values, perPage, offset],
+    );
+
+    return { orders: ordersResult.rows, total };
+  }
+
+  async getOrderDetails(orderId: string) {
+    const orderResult = await this.db.query(
+      `SELECT o.*,
+              cu.email as customer_email,
+              cp.first_name as customer_first_name, cp.last_name as customer_last_name,
+              ch.business_name as chef_name, chu.email as chef_email,
+              du.email as driver_email,
+              dp.first_name as driver_first_name, dp.last_name as driver_last_name
+       FROM orders o
+       LEFT JOIN customers c ON o.customer_id = c.id
+       LEFT JOIN users cu ON c.user_id = cu.id
+       LEFT JOIN user_profiles cp ON cu.id = cp.user_id
+       LEFT JOIN chefs ch ON o.chef_id = ch.id
+       LEFT JOIN users chu ON ch.user_id = chu.id
+       LEFT JOIN drivers d ON o.driver_id = d.id
+       LEFT JOIN users du ON d.user_id = du.id
+       LEFT JOIN user_profiles dp ON du.id = dp.user_id
+       WHERE o.id = $1`,
+      [orderId],
+    );
+
+    if (orderResult.rows.length === 0) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    // Get order items
+    const itemsResult = await this.db.query(
+      `SELECT oi.*, mi.name as item_name, mi.description as item_description
+       FROM order_items oi
+       LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+       WHERE oi.order_id = $1`,
+      [orderId],
+    );
+
+    // Get status history
+    const historyResult = await this.db.query(
+      `SELECT osh.*, u.email as created_by_email
+       FROM order_status_history osh
+       LEFT JOIN users u ON osh.created_by = u.id
+       WHERE osh.order_id = $1
+       ORDER BY osh.created_at ASC`,
+      [orderId],
+    );
+
+    // Get payment info
+    const paymentResult = await this.db.query(
+      `SELECT * FROM payments WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [orderId],
+    );
+
+    return {
+      order: {
+        ...orderResult.rows[0],
+        items: itemsResult.rows,
+        statusHistory: historyResult.rows,
+        payment: paymentResult.rows[0] || null,
+      },
+    };
+  }
+
+  async refundOrder(orderId: string, reason?: string) {
+    // Get order details
+    const orderResult = await this.db.query(
+      `SELECT id, status, total_cents, chef_id, driver_id
+       FROM orders WHERE id = $1`,
+      [orderId],
+    );
+
+    if (orderResult.rows.length === 0) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    const order = orderResult.rows[0];
+
+    if (order.status === 'refunded') {
+      throw new BadRequestException('Order has already been refunded');
+    }
+
+    // Update order status to refunded
+    await this.db.query(
+      `UPDATE orders SET status = 'refunded', updated_at = NOW() WHERE id = $1`,
+      [orderId],
+    );
+
+    // Add to status history
+    await this.db.query(
+      `INSERT INTO order_status_history (order_id, status, notes)
+       VALUES ($1, 'refunded', $2)`,
+      [orderId, reason || 'Refunded by admin'],
+    );
+
+    // Update payment status if exists
+    await this.db.query(
+      `UPDATE payments SET status = 'refunded', updated_at = NOW() WHERE order_id = $1`,
+      [orderId],
+    );
+
+    // Remove earnings from ledgers (mark as not available for payout)
+    if (order.chef_id) {
+      await this.db.query(
+        `UPDATE chef_ledger SET available_for_payout = FALSE WHERE order_id = $1`,
+        [orderId],
+      );
+    }
+
+    if (order.driver_id) {
+      await this.db.query(
+        `UPDATE driver_ledger SET available_for_payout = FALSE WHERE order_id = $1`,
+        [orderId],
+      );
+    }
+
+    return {
+      success: true,
+      message: `Order ${orderId} has been refunded`,
+      refundAmount: order.total_cents,
+      reason,
+    };
+  }
+
+  // ===========================================================================
+  // Commission & Analytics
+  // ===========================================================================
+
+  async getCommissionStats(period: 'day' | 'week' | 'month' | 'year' = 'month'): Promise<CommissionStatsResponse> {
+    // Determine date range based on period
+    let dateInterval: string;
+    let dateTrunc: string;
+
+    switch (period) {
+      case 'day':
+        dateInterval = '1 day';
+        dateTrunc = 'hour';
+        break;
+      case 'week':
+        dateInterval = '7 days';
+        dateTrunc = 'day';
+        break;
+      case 'month':
+        dateInterval = '30 days';
+        dateTrunc = 'day';
+        break;
+      case 'year':
+        dateInterval = '365 days';
+        dateTrunc = 'month';
+        break;
+      default:
+        dateInterval = '30 days';
+        dateTrunc = 'day';
+    }
+
+    // Get summary stats
+    const summaryResult = await this.db.query(
+      `SELECT
+         COALESCE(SUM(total_cents), 0) as total_revenue,
+         COALESCE(SUM(platform_fee_cents), 0) as total_commission,
+         COUNT(*) as order_count,
+         COALESCE(AVG(total_cents), 0) as avg_order_value
+       FROM orders
+       WHERE status = 'delivered'
+         AND created_at >= NOW() - INTERVAL '${dateInterval}'`,
+    );
+
+    // Get breakdown by date
+    const byDateResult = await this.db.query(
+      `SELECT
+         DATE_TRUNC('${dateTrunc}', created_at) as date,
+         COALESCE(SUM(total_cents), 0) as revenue,
+         COALESCE(SUM(platform_fee_cents), 0) as commission
+       FROM orders
+       WHERE status = 'delivered'
+         AND created_at >= NOW() - INTERVAL '${dateInterval}'
+       GROUP BY DATE_TRUNC('${dateTrunc}', created_at)
+       ORDER BY date ASC`,
+    );
+
+    const summary = summaryResult.rows[0];
+
+    return {
+      totalRevenue: parseInt(summary.total_revenue, 10),
+      totalCommission: parseInt(summary.total_commission, 10),
+      orderCount: parseInt(summary.order_count, 10),
+      avgOrderValue: Math.round(parseFloat(summary.avg_order_value)),
+      byDate: byDateResult.rows.map((row) => ({
+        date: row.date.toISOString().split('T')[0],
+        revenue: parseInt(row.revenue, 10),
+        commission: parseInt(row.commission, 10),
+      })),
+    };
+  }
+
+  async getPayouts(status?: string) {
+    const conditions: string[] = [];
+    const values: string[] = [];
+
+    if (status) {
+      conditions.push('p.status = $1');
+      values.push(status);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await this.db.query(
+      `SELECT p.*, u.email, u.role as user_role
+       FROM payouts p
+       JOIN users u ON p.user_id = u.id
+       ${whereClause}
+       ORDER BY p.created_at DESC
+       LIMIT 200`,
+      values,
+    );
+
+    return { payouts: result.rows };
+  }
+
+  // ===========================================================================
+  // Reviews
+  // ===========================================================================
+
+  async listReviews(revieweeType?: 'chef' | 'driver', flagged?: boolean) {
+    const conditions: string[] = [];
+    const values: (string | number)[] = [];
+    let paramIndex = 1;
+
+    if (revieweeType) {
+      conditions.push(`r.reviewee_type = $${paramIndex++}`);
+      values.push(revieweeType);
+    }
+
+    // For flagged reviews, we could flag low-rating reviews (1-2 stars)
+    if (flagged) {
+      conditions.push(`r.rating <= 2`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT r.id, r.order_id, r.reviewee_id, r.reviewee_type, r.rating,
+             r.comment, r.created_at,
+             ru.email as reviewer_email,
+             reu.email as reviewee_email
+      FROM reviews r
+      JOIN users ru ON r.reviewer_id = ru.id
+      JOIN users reu ON r.reviewee_id = reu.id
+      ${whereClause}
+      ORDER BY r.created_at DESC
+      LIMIT 200
+    `;
+
+    const result = await this.db.query(sql, values);
+    return { reviews: result.rows };
+  }
+
+  async removeReview(reviewId: string, reason?: string) {
+    // Verify review exists
+    const reviewCheck = await this.db.query(
+      'SELECT id, reviewee_id, reviewee_type, rating FROM reviews WHERE id = $1',
+      [reviewId],
+    );
+
+    if (reviewCheck.rows.length === 0) {
+      throw new NotFoundException(`Review with ID ${reviewId} not found`);
+    }
+
+    const review = reviewCheck.rows[0];
+
+    // Delete the review
+    await this.db.query('DELETE FROM reviews WHERE id = $1', [reviewId]);
+
+    // Recalculate the reviewee's rating
+    if (review.reviewee_type === 'chef') {
+      await this.db.query(
+        `UPDATE chefs SET rating = (
+           SELECT COALESCE(AVG(rating), 0)
+           FROM reviews r
+           JOIN chefs c ON r.reviewee_id = c.user_id
+           WHERE c.id = (SELECT id FROM chefs WHERE user_id = $1)
+         ), updated_at = NOW()
+         WHERE user_id = $1`,
+        [review.reviewee_id],
+      );
+    } else if (review.reviewee_type === 'driver') {
+      await this.db.query(
+        `UPDATE drivers SET rating = (
+           SELECT COALESCE(AVG(rating), 0)
+           FROM reviews r
+           JOIN drivers d ON r.reviewee_id = d.user_id
+           WHERE d.id = (SELECT id FROM drivers WHERE user_id = $1)
+         ), updated_at = NOW()
+         WHERE user_id = $1`,
+        [review.reviewee_id],
+      );
+    }
+
+    return {
+      success: true,
+      message: `Review ${reviewId} has been removed`,
+      reason,
+    };
+  }
+
+  // ===========================================================================
+  // Settings
+  // ===========================================================================
+
+  async getSettings() {
+    // Settings could be stored in a dedicated settings table or as a JSON config
+    // For now, we'll check if a platform_settings table exists, otherwise return defaults
+    try {
+      const result = await this.db.query(
+        `SELECT * FROM platform_settings WHERE id = 1`,
+      );
+
+      if (result.rows.length > 0) {
+        return { settings: result.rows[0] };
+      }
+    } catch {
+      // Table doesn't exist, return defaults
+    }
+
+    // Return default settings
+    return {
+      settings: {
+        platform_fee_percent: 15,
+        delivery_fee_base_cents: 299,
+        delivery_fee_per_km_cents: 50,
+        minimum_order_cents: 1000,
+        tax_rate_percent: 8.25,
+        maintenance_mode: false,
+        new_chef_signups_enabled: true,
+        new_driver_signups_enabled: true,
+        operating_hours: {
+          monday: { open: '08:00', close: '22:00' },
+          tuesday: { open: '08:00', close: '22:00' },
+          wednesday: { open: '08:00', close: '22:00' },
+          thursday: { open: '08:00', close: '22:00' },
+          friday: { open: '08:00', close: '23:00' },
+          saturday: { open: '09:00', close: '23:00' },
+          sunday: { open: '09:00', close: '21:00' },
+        },
+      },
+    };
+  }
+
+  async updateSettings(data: UpdateSettingsDto) {
+    // Try to update existing settings or create if not exists
+    try {
+      // Check if platform_settings table exists
+      const tableCheck = await this.db.query(
+        `SELECT EXISTS (
+           SELECT FROM information_schema.tables
+           WHERE table_name = 'platform_settings'
+         )`,
+      );
+
+      if (!tableCheck.rows[0].exists) {
+        // Create the settings table
+        await this.db.query(`
+          CREATE TABLE platform_settings (
+            id INT PRIMARY KEY DEFAULT 1,
+            platform_fee_percent DECIMAL(5,2) DEFAULT 15.00,
+            delivery_fee_base_cents INT DEFAULT 299,
+            delivery_fee_per_km_cents INT DEFAULT 50,
+            minimum_order_cents INT DEFAULT 1000,
+            tax_rate_percent DECIMAL(5,2) DEFAULT 8.25,
+            maintenance_mode BOOLEAN DEFAULT FALSE,
+            new_chef_signups_enabled BOOLEAN DEFAULT TRUE,
+            new_driver_signups_enabled BOOLEAN DEFAULT TRUE,
+            operating_hours JSONB DEFAULT '{}'::jsonb,
+            updated_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT single_row CHECK (id = 1)
+          )
+        `);
+
+        // Insert default row
+        await this.db.query(
+          `INSERT INTO platform_settings (id) VALUES (1) ON CONFLICT DO NOTHING`,
+        );
+      }
+
+      // Build update query dynamically
+      const updates: string[] = [];
+      const values: (string | number | boolean | object)[] = [];
+      let paramIndex = 1;
+
+      if (data.platform_fee_percent !== undefined) {
+        updates.push(`platform_fee_percent = $${paramIndex++}`);
+        values.push(data.platform_fee_percent);
+      }
+      if (data.delivery_fee_base_cents !== undefined) {
+        updates.push(`delivery_fee_base_cents = $${paramIndex++}`);
+        values.push(data.delivery_fee_base_cents);
+      }
+      if (data.delivery_fee_per_km_cents !== undefined) {
+        updates.push(`delivery_fee_per_km_cents = $${paramIndex++}`);
+        values.push(data.delivery_fee_per_km_cents);
+      }
+      if (data.minimum_order_cents !== undefined) {
+        updates.push(`minimum_order_cents = $${paramIndex++}`);
+        values.push(data.minimum_order_cents);
+      }
+      if (data.tax_rate_percent !== undefined) {
+        updates.push(`tax_rate_percent = $${paramIndex++}`);
+        values.push(data.tax_rate_percent);
+      }
+      if (data.maintenance_mode !== undefined) {
+        updates.push(`maintenance_mode = $${paramIndex++}`);
+        values.push(data.maintenance_mode);
+      }
+      if (data.new_chef_signups_enabled !== undefined) {
+        updates.push(`new_chef_signups_enabled = $${paramIndex++}`);
+        values.push(data.new_chef_signups_enabled);
+      }
+      if (data.new_driver_signups_enabled !== undefined) {
+        updates.push(`new_driver_signups_enabled = $${paramIndex++}`);
+        values.push(data.new_driver_signups_enabled);
+      }
+      if (data.operating_hours !== undefined) {
+        updates.push(`operating_hours = $${paramIndex++}`);
+        values.push(JSON.stringify(data.operating_hours));
+      }
+
+      if (updates.length > 0) {
+        updates.push('updated_at = NOW()');
+        await this.db.query(
+          `UPDATE platform_settings SET ${updates.join(', ')} WHERE id = 1`,
+          values,
+        );
+      }
+
+      // Return updated settings
+      const result = await this.db.query(
+        `SELECT * FROM platform_settings WHERE id = 1`,
+      );
+
+      return { settings: result.rows[0] };
+    } catch (error) {
+      throw new BadRequestException(`Failed to update settings: ${(error as Error).message}`);
+    }
+  }
+}

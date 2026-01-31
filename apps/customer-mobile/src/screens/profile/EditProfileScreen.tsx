@@ -28,8 +28,9 @@ export default function EditProfileScreen() {
       updateUser(updatedUser);
       Alert.alert('Success', 'Profile updated successfully');
       navigation.goBack();
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update profile');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update profile';
+      Alert.alert('Error', message);
     } finally {
       setLoading(false);
     }
@@ -44,12 +45,7 @@ export default function EditProfileScreen() {
         autoCapitalize="words"
       />
 
-      <Input
-        label="Last Name"
-        value={lastName}
-        onChangeText={setLastName}
-        autoCapitalize="words"
-      />
+      <Input label="Last Name" value={lastName} onChangeText={setLastName} autoCapitalize="words" />
 
       <Input
         label="Email"
@@ -58,20 +54,10 @@ export default function EditProfileScreen() {
         containerStyle={styles.disabledInput}
       />
 
-      <Input
-        label="Phone"
-        value={phone}
-        onChangeText={setPhone}
-        keyboardType="phone-pad"
-      />
+      <Input label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
 
       <View style={styles.buttonContainer}>
-        <Button
-          title="Save Changes"
-          onPress={handleSave}
-          loading={loading}
-          size="large"
-        />
+        <Button title="Save Changes" onPress={handleSave} loading={loading} size="large" />
       </View>
     </ScrollView>
   );

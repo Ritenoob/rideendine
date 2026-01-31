@@ -4,6 +4,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@/navigation/types';
 import { Card, Button } from '@/components/ui';
 import { OrderStatusTimeline } from '@/components/order';
 import { api } from '@/services';
@@ -35,8 +38,8 @@ interface Order {
 }
 
 export default function OrderDetailScreen() {
-  const route = useRoute<any>();
-  const navigation = useNavigation<any>();
+  const route = useRoute<RouteProp<RootStackParamList, 'OrderDetail'>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { orderId } = route.params;
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -107,9 +110,7 @@ export default function OrderDetailScreen() {
               <Text style={styles.itemQuantity}>{item.quantity}x</Text>
               <Text style={styles.itemName}>{item.name}</Text>
             </View>
-            <Text style={styles.itemPrice}>
-              {formatCurrency(item.price * item.quantity)}
-            </Text>
+            <Text style={styles.itemPrice}>{formatCurrency(item.price * item.quantity)}</Text>
           </View>
         ))}
       </Card>
@@ -117,9 +118,7 @@ export default function OrderDetailScreen() {
       {/* Delivery Address */}
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Delivered To</Text>
-        <Text style={styles.addressText}>
-          {order.deliveryAddress.street}
-        </Text>
+        <Text style={styles.addressText}>{order.deliveryAddress.street}</Text>
         <Text style={styles.addressText}>
           {order.deliveryAddress.city}, {order.deliveryAddress.state}{' '}
           {order.deliveryAddress.zipCode}
@@ -171,12 +170,7 @@ export default function OrderDetailScreen() {
             onPress={() => navigation.navigate('Review', { orderId: order.id })}
             size="large"
           />
-          <Button
-            title="Reorder"
-            onPress={() => {}}
-            variant="outline"
-            size="large"
-          />
+          <Button title="Reorder" onPress={() => {}} variant="outline" size="large" />
         </View>
       )}
     </ScrollView>

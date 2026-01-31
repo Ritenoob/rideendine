@@ -4,6 +4,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { RootStackParamList } from '@/navigation/types';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { Card } from '@/components/ui';
 import { OrderStatusTimeline } from '@/components/order';
@@ -13,21 +15,13 @@ import { useOrderStore } from '@/store';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function OrderTrackingScreen() {
-  const route = useRoute<any>();
+  const route = useRoute<RouteProp<RootStackParamList, 'OrderTracking'>>();
   const { orderId } = route.params;
 
   const mapRef = useRef<MapView>(null);
   const etaIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const {
-    activeOrder,
-    driverLocation,
-    etaMinutes,
-    setActiveOrder,
-    updateOrderStatus,
-    setDriverLocation,
-    setEta,
-  } = useOrderStore();
+  const { activeOrder, driverLocation, etaMinutes, setActiveOrder, setEta } = useOrderStore();
 
   const [loading, setLoading] = useState(true);
 
@@ -85,7 +79,7 @@ export default function OrderTrackingScreen() {
         {
           edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
           animated: true,
-        }
+        },
       );
     }
   }, [driverLocation]);
@@ -195,9 +189,7 @@ export default function OrderTrackingScreen() {
         <Card style={styles.orderCard}>
           <View style={styles.orderHeader}>
             <Text style={styles.orderLabel}>Order</Text>
-            <Text style={styles.orderTotal}>
-              {formatCurrency(activeOrder.total)}
-            </Text>
+            <Text style={styles.orderTotal}>{formatCurrency(activeOrder.total)}</Text>
           </View>
           <Text style={styles.orderChef}>{activeOrder.chefName || 'Chef'}</Text>
           <Text style={styles.orderAddress}>

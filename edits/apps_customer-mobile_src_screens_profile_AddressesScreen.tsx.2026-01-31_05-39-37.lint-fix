@@ -1,0 +1,350 @@
+/**
+ * Addresses Screen - Saved delivery addresses
+ */
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Switch,
+} from 'react-native';
+import { Button, Card, Input } from '@/components/ui';
+import { Address, useProfileStore } from '@/store/profileStore';
+
+const emptyForm = {
+  label: '',
+  street: '',
+  city: '',
+  state: '',
+  zipCode: '',
+  instructions: '',
+  makeDefault: false,
+};
+
+export default function AddressesScreen() {
+  const {
+    addresses,
+    isLoading,
+    loadProfileData,
+    addAddress,
+    updateAddress,
+    removeAddress,
+    setDefaultAddress,
+  } = useProfileStore();
+
+  const [form, setForm] = useState({ ...emptyForm });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadProfileData();
+  }, [loadProfileData]);
+
+  const isEditing = Boolean(editingId);
+
+  const formTitle = useMemo(() => {
+    return isEditing ? 'Edit Address' : 'Add New Address';
+  }, [isEditing]);
+
+  const resetForm = () => {
+    setForm({ ...emptyForm });
+    setEditingId(null);
+  };
+
+  const handleSave = async () => {
+    if (!form.street.trim() || !form.city.trim() || !form.state.trim() || !form.zipCode.trim()) {
+      Alert.alert('Missing Details', 'Please fill in all required address fields.');
+      return;
+    }
+
+    const label = form.label.trim() || (addresses.length === 0 ? 'Home' : 'Address');
+
+    const payload = {
+      label,
+      street: form.street.trim(),
+      city: form.city.trim(),
+      state: form.state.trim(),
+      zipCode: form.zipCode.trim(),
+      instructions: form.instructions.trim() || undefined,
+      isDefault: form.makeDefault,
+    };
+
+    try {
+      if (editingId) {
+        await updateAddress(editingId, payload);
+      } else {
+        await addAddress(payload);
+      }
+      resetForm();
+    } catch (error) {
+      Alert.alert('Save Failed', 'Unable to save address. Please try again.');
+    }
+  };
+
+  const handleEdit = (address: Address) => {
+    setEditingId(address.id);
+    setForm({
+      label: address.label,
+      street: address.street,
+      city: address.city,
+      state: address.state,
+      zipCode: address.zipCode,
+      instructions: address.instructions || '',
+      makeDefault: address.isDefault,
+    });
+  };
+
+  const handleDelete = (address: Address) => {
+    Alert.alert('Delete Address', 'Remove this address from your saved list?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => removeAddress(address.id),
+      },
+    ]);
+  };
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Saved Addresses</Text>
+        <Text style={styles.sectionSubtitle}>Manage your delivery locations</Text>
+      </View>
+
+      {addresses.length === 0 && !isLoading ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>No saved addresses yet</Text>
+          <Text style={styles.emptyText}>Add one below to speed up checkout.</Text>
+        </View>
+      ) : (
+        addresses.map((address) => (
+          <Card key={address.id} style={styles.addressCard}>
+            <View style={styles.addressHeader}>
+              <Text style={styles.addressLabel}>{address.label}</Text>
+              {address.isDefault && <Text style={styles.defaultBadge}>Default</Text>}
+            </View>
+            <Text style={styles.addressLine}>{address.street}</Text>
+            <Text style={styles.addressLine}>
+              {address.city}, {address.state} {address.zipCode}
+            </Text>
+            {address.instructions ? (
+              <Text style={styles.instructions}>Note: {address.instructions}</Text>
+            ) : null}
+            <View style={styles.actionsRow}>
+              {!address.isDefault && (
+                <TouchableOpacity onPress={() => setDefaultAddress(address.id)}>
+                  <Text style={styles.actionLink}>Set Default</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => handleEdit(address)}>
+                <Text style={styles.actionLink}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleDelete(address)}>
+                <Text style={styles.actionLinkDanger}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
+        ))
+      )}
+
+      <Card style={styles.formCard}>
+        <Text style={styles.formTitle}>{formTitle}</Text>
+        <Input
+          label="Label"
+          placeholder="Home, Work, etc."
+          value={form.label}
+          onChangeText={(value) => setForm((prev) => ({ ...prev, label: value }))}
+        />
+        <Input
+          label="Street Address"
+          placeholder="123 Main St"
+          value={form.street}
+          onChangeText={(value) => setForm((prev) => ({ ...prev, street: value }))}
+        />
+        <View style={styles.row}>
+          <View style={styles.halfInput}>
+            <Input
+              label="City"
+              placeholder="Austin"
+              value={form.city}
+              onChangeText={(value) => setForm((prev) => ({ ...prev, city: value }))}
+            />
+          </View>
+          <View style={styles.halfInput}>
+            <Input
+              label="State"
+              placeholder="TX"
+              value={form.state}
+              onChangeText={(value) => setForm((prev) => ({ ...prev, state: value }))}
+            />
+          </View>
+        </View>
+        <Input
+          label="ZIP Code"
+          placeholder="78701"
+          value={form.zipCode}
+          onChangeText={(value) => setForm((prev) => ({ ...prev, zipCode: value }))}
+          keyboardType="number-pad"
+        />
+        <Input
+          label="Delivery Instructions"
+          placeholder="Gate code, building entrance, etc."
+          value={form.instructions}
+          onChangeText={(value) => setForm((prev) => ({ ...prev, instructions: value }))}
+          multiline
+        />
+
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>Set as default</Text>
+          <Switch
+            value={form.makeDefault}
+            onValueChange={(value) => setForm((prev) => ({ ...prev, makeDefault: value }))}
+            trackColor={{ true: '#ff9800' }}
+          />
+        </View>
+
+        <View style={styles.formActions}>
+          {isEditing && (
+            <Button
+              title="Cancel"
+              onPress={resetForm}
+              variant="ghost"
+              style={styles.formButton}
+            />
+          )}
+          <Button
+            title={isEditing ? 'Update Address' : 'Save Address'}
+            onPress={handleSave}
+            style={styles.formButton}
+          />
+        </View>
+      </Card>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f7f4ee',
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  sectionHeader: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#151515',
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    marginTop: 4,
+  },
+  emptyState: {
+    padding: 24,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 6,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#5f5f5f',
+  },
+  addressCard: {
+    marginBottom: 12,
+  },
+  addressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  addressLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+  },
+  defaultBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ff9800',
+    backgroundColor: '#fff3e0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  addressLine: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    marginBottom: 2,
+  },
+  instructions: {
+    fontSize: 13,
+    color: '#9e9e9e',
+    marginTop: 6,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 12,
+  },
+  actionLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ff9800',
+  },
+  actionLinkDanger: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#d32f2f',
+  },
+  formCard: {
+    marginTop: 8,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfInput: {
+    flex: 1,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  switchLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#151515',
+  },
+  formActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  formButton: {
+    minWidth: 140,
+  },
+});

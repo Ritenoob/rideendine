@@ -63,9 +63,7 @@ class LocationService {
     }
   }
 
-  async reverseGeocode(
-    coords: Coordinates
-  ): Promise<LocationResult['address'] | undefined> {
+  async reverseGeocode(coords: Coordinates): Promise<LocationResult['address'] | undefined> {
     try {
       const results = await Location.reverseGeocodeAsync({
         latitude: coords.lat,
@@ -87,9 +85,7 @@ class LocationService {
     return undefined;
   }
 
-  async geocode(
-    address: string
-  ): Promise<Coordinates | null> {
+  async geocode(address: string): Promise<Coordinates | null> {
     try {
       const results = await Location.geocodeAsync(address);
       if (results.length > 0) {
@@ -104,10 +100,7 @@ class LocationService {
     return null;
   }
 
-  calculateDistance(
-    from: Coordinates,
-    to: Coordinates
-  ): number {
+  calculateDistance(from: Coordinates, to: Coordinates): number {
     const R = 3959; // Earth's radius in miles
     const dLat = this.toRad(to.lat - from.lat);
     const dLng = this.toRad(to.lng - from.lng);

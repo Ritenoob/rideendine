@@ -2,14 +2,7 @@
  * Input Component
  */
 import React, { useState } from 'react';
-import {
-  View,
-  TextInput,
-  Text,
-  StyleSheet,
-  TextInputProps,
-  TouchableOpacity,
-} from 'react-native';
+import { View, TextInput, Text, StyleSheet, TextInputProps, TouchableOpacity } from 'react-native';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -61,14 +54,10 @@ export default function Input({
             style={styles.iconRight}
             onPress={() => setIsPasswordVisible(!isPasswordVisible)}
           >
-            <Text style={styles.toggleText}>
-              {isPasswordVisible ? '🙈' : '👁️'}
-            </Text>
+            <Text style={styles.toggleText}>{isPasswordVisible ? '🙈' : '👁️'}</Text>
           </TouchableOpacity>
         )}
-        {rightIcon && !showPasswordToggle && (
-          <View style={styles.iconRight}>{rightIcon}</View>
-        )}
+        {rightIcon && !showPasswordToggle && <View style={styles.iconRight}>{rightIcon}</View>}
       </View>
       {error && <Text style={styles.error}>{error}</Text>}
     </View>

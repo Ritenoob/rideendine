@@ -1,7 +1,7 @@
 /**
- * Chef Detail Screen - Chef profile with menu
+ * Chef Detail Screen - Chef profile with menu, reviews, and info tabs
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { MenuItemCard } from '@/components/chef';
-import { Button } from '@/components/ui';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@/navigation/types';
+import { MenuItemCard, ReviewCard } from '@/components/chef';
+import { Button, TabView } from '@/components/ui';
 import { api } from '@/services';
-import { useCartStore } from '@/store';
+import { useCartStore, useFavoritesStore } from '@/store';
 
 interface MenuItem {
   id: string;
@@ -35,6 +38,14 @@ interface MenuItem {
   spiceLevel: number;
 }
 
+interface Review {
+  id: string;
+  reviewerName: string;
+  rating: number;
+  comment: string;
+  date: string;
+}
+
 interface Chef {
   id: string;
   businessName: string;
@@ -49,33 +60,90 @@ interface Chef {
   averagePrepTime: number;
   minimumOrder: number;
   deliveryRadius: number;
-  operatingHours?: any[];
+  operatingHours?: OperatingHour[];
 }
 
+interface OperatingHour {
+  day: string;
+  open: string;
+  close: string;
+}
+
+interface ReviewPayload {
+  id?: string;
+  reviewId?: string;
+  reviewerName?: string;
+  customerName?: string;
+  customer?: { name?: string };
+  rating?: number;
+  chefRating?: number;
+  score?: number;
+  comment?: string;
+  chefComment?: string;
+  text?: string;
+  date?: string;
+  createdAt?: string;
+}
+
+const TABS = [
+  { id: 'menu', label: 'Menu' },
+  { id: 'reviews', label: 'Reviews' },
+  { id: 'info', label: 'Info' },
+];
+
 export default function ChefDetailScreen() {
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'ChefDetail'>>();
   const { chefId } = route.params;
 
   const { setChef, addItem, itemCount, chef: cartChef, total } = useCartStore();
+  const { isFavorite, toggleFavorite, loadFavorites } = useFavoritesStore();
 
   const [chef, setChefData] = useState<Chef | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('menu');
+
+  useEffect(() => {
+    loadFavorites();
+  }, [loadFavorites]);
+
+  const normalizeReviews = (data: unknown): Review[] => {
+    const payload = data as { data?: ReviewPayload[] };
+    const list = Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(data)
+        ? (data as ReviewPayload[])
+        : [];
+
+    return list.map((review, index) => ({
+      id: review.id || review.reviewId || `${chefId}-${index}`,
+      reviewerName:
+        review.reviewerName || review.customerName || review.customer?.name || 'Customer',
+      rating: Number(review.rating ?? review.chefRating ?? review.score ?? 0),
+      comment: review.comment || review.chefComment || review.text || 'Delicious meal!',
+      date: review.date || review.createdAt || new Date().toISOString(),
+    }));
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [chefData, menusData] = await Promise.all([
+        const [chefData, menusData, reviewsData] = await Promise.all([
           api.getChef(chefId),
           api.getChefMenus(chefId),
+          api.getChefReviews(chefId),
         ]);
 
         setChefData(chefData);
 
         // Flatten menu items from all menus
-        const allItems = menusData.flatMap((menu: any) => menu.items || []);
+        const allItems = (menusData as Array<{ items?: MenuItem[] }>).flatMap(
+          (menu) => menu.items || [],
+        );
         setMenuItems(allItems);
+        setReviews(normalizeReviews(reviewsData));
       } catch (error) {
         console.error('Failed to fetch chef data:', error);
       } finally {
@@ -106,6 +174,22 @@ export default function ChefDetailScreen() {
     navigation.navigate('MenuItem', { item, chef });
   };
 
+  const handleFavoritePress = () => {
+    if (chef) {
+      toggleFavorite({
+        id: chef.id,
+        businessName: chef.businessName,
+        cuisineTypes: chef.cuisineTypes || [],
+        profileImageUrl: chef.profileImageUrl,
+        rating: chef.rating || 0,
+        reviewCount: chef.reviewCount || 0,
+        averagePrepTime: chef.averagePrepTime || 0,
+        minimumOrder: chef.minimumOrder || 0,
+        city: chef.city,
+      });
+    }
+  };
+
   // Group items by category
   const sections = menuItems.reduce((acc: { title: string; data: MenuItem[] }[], item) => {
     const existing = acc.find((s) => s.title === item.category);
@@ -116,6 +200,100 @@ export default function ChefDetailScreen() {
     }
     return acc;
   }, []);
+
+  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+  const formatOperatingHours = (hours: OperatingHour[]) => {
+    if (!hours || hours.length === 0) return 'Not available';
+    return hours.map((hour) => `${hour.day}: ${hour.open} - ${hour.close}`).join('\n');
+  };
+
+  const reviewSummary = useMemo(() => {
+    if (!reviews.length) return null;
+    const avg = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
+    return avg.toFixed(1);
+  }, [reviews]);
+
+  const renderMenuTab = () => (
+    <SectionList
+      sections={sections}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <MenuItemCard
+          item={item}
+          onPress={() => handleItemPress(item)}
+          onAddToCart={() => handleAddToCart(item)}
+        />
+      )}
+      renderSectionHeader={({ section: { title } }) => (
+        <Text style={styles.sectionHeader}>{title}</Text>
+      )}
+      contentContainerStyle={styles.listContent}
+      stickySectionHeadersEnabled={false}
+    />
+  );
+
+  const renderReviewsTab = () => {
+    if (reviews.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>⭐</Text>
+          <Text style={styles.emptyTitle}>No reviews yet</Text>
+          <Text style={styles.emptyText}>Be the first to review {chef?.businessName}</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.reviewsContainer}>
+        {reviewSummary && (
+          <Text style={styles.reviewSummary}>
+            ⭐ {reviewSummary} • {reviews.length} reviews
+          </Text>
+        )}
+        {reviews.map((review) => (
+          <ReviewCard
+            key={review.id}
+            reviewerName={review.reviewerName}
+            rating={review.rating}
+            comment={review.comment}
+            date={review.date}
+          />
+        ))}
+      </View>
+    );
+  };
+
+  const renderInfoTab = () => (
+    <View style={styles.infoContainer}>
+      <View style={styles.infoSection}>
+        <Text style={styles.infoSectionTitle}>About</Text>
+        {chef?.description && <Text style={styles.infoText}>{chef.description}</Text>}
+      </View>
+
+      <View style={styles.infoSection}>
+        <Text style={styles.infoSectionTitle}>Location</Text>
+        <Text style={styles.infoText}>{chef?.address}</Text>
+        <Text style={styles.infoText}>{chef?.city}</Text>
+      </View>
+
+      <View style={styles.infoSection}>
+        <Text style={styles.infoSectionTitle}>Operating Hours</Text>
+        <Text style={styles.infoText}>
+          {chef?.operatingHours ? formatOperatingHours(chef.operatingHours) : 'Not available'}
+        </Text>
+      </View>
+
+      <View style={styles.infoSection}>
+        <Text style={styles.infoSectionTitle}>Delivery Info</Text>
+        <Text style={styles.infoText}>Delivery radius: {chef?.deliveryRadius} miles</Text>
+        <Text style={styles.infoText}>
+          Minimum order: {formatCurrency(chef?.minimumOrder || 0)}
+        </Text>
+        <Text style={styles.infoText}>Average prep time: {chef?.averagePrepTime} minutes</Text>
+      </View>
+    </View>
+  );
 
   if (loading) {
     return (
@@ -133,70 +311,58 @@ export default function ChefDetailScreen() {
     );
   }
 
-  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-
   return (
     <View style={styles.container}>
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <MenuItemCard
-            item={item}
-            onPress={() => handleItemPress(item)}
-            onAddToCart={() => handleAddToCart(item)}
+      <ScrollView>
+        {/* Banner */}
+        <Image
+          source={{
+            uri:
+              chef.bannerImageUrl || chef.profileImageUrl || 'https://via.placeholder.com/400x200',
+          }}
+          style={styles.banner}
+        />
+
+        {/* Chef Info */}
+        <View style={styles.chefInfo}>
+          <Image
+            source={{
+              uri: chef.profileImageUrl || 'https://via.placeholder.com/80',
+            }}
+            style={styles.avatar}
           />
-        )}
-        renderSectionHeader={({ section: { title } }) => (
-          <Text style={styles.sectionHeader}>{title}</Text>
-        )}
-        ListHeaderComponent={
-          <View>
-            {/* Banner */}
-            <Image
-              source={{
-                uri: chef.bannerImageUrl || chef.profileImageUrl || 'https://via.placeholder.com/400x200',
-              }}
-              style={styles.banner}
-            />
-
-            {/* Chef Info */}
-            <View style={styles.chefInfo}>
-              <Image
-                source={{
-                  uri: chef.profileImageUrl || 'https://via.placeholder.com/80',
-                }}
-                style={styles.avatar}
-              />
-              <View style={styles.infoContent}>
-                <Text style={styles.name}>{chef.businessName}</Text>
-                <Text style={styles.cuisines}>
-                  {chef.cuisineTypes.join(' • ')}
-                </Text>
-                <View style={styles.stats}>
-                  <Text style={styles.stat}>⭐ {chef.rating.toFixed(1)} ({chef.reviewCount})</Text>
-                  <Text style={styles.stat}>⏱️ {chef.averagePrepTime} min</Text>
-                  <Text style={styles.stat}>📍 {chef.city}</Text>
-                </View>
-              </View>
+          <View style={styles.infoContent}>
+            <View style={styles.headerRow}>
+              <Text style={styles.name}>{chef.businessName}</Text>
+              <TouchableOpacity
+                style={styles.favoriteButton}
+                onPress={handleFavoritePress}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.favoriteIcon}>{isFavorite(chef.id) ? '❤️' : '🤍'}</Text>
+              </TouchableOpacity>
             </View>
-
-            {chef.description && (
-              <Text style={styles.description}>{chef.description}</Text>
-            )}
-
-            <View style={styles.minimumOrder}>
-              <Text style={styles.minimumOrderText}>
-                Minimum order: {formatCurrency(chef.minimumOrder)}
+            <Text style={styles.cuisines}>{chef.cuisineTypes.join(' • ')}</Text>
+            <View style={styles.stats}>
+              <Text style={styles.stat}>
+                ⭐ {chef.rating.toFixed(1)} ({chef.reviewCount})
               </Text>
+              <Text style={styles.stat}>⏱️ {chef.averagePrepTime} min</Text>
+              <Text style={styles.stat}>📍 {chef.city}</Text>
             </View>
-
-            <Text style={styles.menuTitle}>Menu</Text>
           </View>
-        }
-        contentContainerStyle={styles.listContent}
-        stickySectionHeadersEnabled={false}
-      />
+        </View>
+
+        {/* Tabs */}
+        <TabView tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+
+        {/* Tab Content */}
+        <View style={styles.tabContent}>
+          {activeTab === 'menu' && renderMenuTab()}
+          {activeTab === 'reviews' && renderReviewsTab()}
+          {activeTab === 'info' && renderInfoTab()}
+        </View>
+      </ScrollView>
 
       {/* Cart Footer */}
       {cartChef?.id === chef.id && itemCount > 0 && (
@@ -205,11 +371,7 @@ export default function ChefDetailScreen() {
             <Text style={styles.cartItemCount}>{itemCount} items</Text>
             <Text style={styles.cartTotal}>{formatCurrency(total)}</Text>
           </View>
-          <Button
-            title="View Cart"
-            onPress={() => navigation.navigate('Cart')}
-            size="medium"
-          />
+          <Button title="View Cart" onPress={() => navigation.navigate('Cart')} size="medium" />
         </View>
       )}
     </View>
@@ -263,10 +425,23 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 16,
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   name: {
     fontSize: 20,
     fontWeight: '700',
     color: '#151515',
+    flex: 1,
+  },
+  favoriteButton: {
+    padding: 4,
+  },
+  favoriteIcon: {
+    fontSize: 24,
   },
   cuisines: {
     fontSize: 13,
@@ -282,32 +457,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#5f5f5f',
   },
-  description: {
-    fontSize: 14,
-    color: '#5f5f5f',
-    lineHeight: 22,
-    padding: 16,
-  },
-  minimumOrder: {
-    backgroundColor: '#fff3e0',
-    padding: 12,
-    marginHorizontal: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  minimumOrderText: {
-    fontSize: 13,
-    color: '#ff9800',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  menuTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#151515',
-    paddingHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 16,
+  tabContent: {
+    minHeight: 400,
   },
   sectionHeader: {
     fontSize: 16,
@@ -320,6 +471,56 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 100,
+  },
+  reviewsContainer: {
+    padding: 16,
+  },
+  reviewSummary: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5f5f5f',
+    marginBottom: 12,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 32,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    textAlign: 'center',
+  },
+  infoContainer: {
+    padding: 16,
+  },
+  infoSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  infoSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#151515',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#5f5f5f',
+    lineHeight: 22,
+    marginBottom: 4,
   },
   cartFooter: {
     position: 'absolute',

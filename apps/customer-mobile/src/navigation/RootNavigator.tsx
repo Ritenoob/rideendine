@@ -26,6 +26,8 @@ import ReviewScreen from '@/screens/order/ReviewScreen';
 
 // Profile Screens
 import EditProfileScreen from '@/screens/profile/EditProfileScreen';
+import AddressesScreen from '@/screens/profile/AddressesScreen';
+import PaymentMethodsScreen from '@/screens/profile/PaymentMethodsScreen';
 import SettingsScreen from '@/screens/profile/SettingsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -128,6 +130,22 @@ export default function RootNavigator() {
             options={{
               headerShown: true,
               headerTitle: 'Edit Profile',
+            }}
+          />
+          <Stack.Screen
+            name="Addresses"
+            component={AddressesScreen}
+            options={{
+              headerShown: true,
+              headerTitle: 'Saved Addresses',
+            }}
+          />
+          <Stack.Screen
+            name="PaymentMethods"
+            component={PaymentMethodsScreen}
+            options={{
+              headerShown: true,
+              headerTitle: 'Payment Methods',
             }}
           />
           <Stack.Screen

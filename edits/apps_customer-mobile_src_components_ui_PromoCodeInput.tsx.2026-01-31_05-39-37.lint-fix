@@ -1,0 +1,221 @@
+/**
+ * Promo Code Input Component
+ * Allows users to enter and apply promo codes
+ */
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
+
+interface PromoCodeInputProps {
+  onApply: (code: string) => Promise<{ valid: boolean; discount?: number; message?: string }>;
+  appliedCode?: string;
+  discount?: number;
+  onRemove?: () => void;
+}
+
+export default function PromoCodeInput({
+  onApply,
+  appliedCode,
+  discount,
+  onRemove,
+}: PromoCodeInputProps) {
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const handleApply = async () => {
+    if (!code.trim()) {
+      setError('Please enter a promo code');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(false);
+
+    try {
+      const result = await onApply(code.trim());
+      
+      if (result.valid) {
+        setSuccess(true);
+        setCode('');
+      } else {
+        setError(result.message || 'Invalid promo code');
+      }
+    } catch (err) {
+      setError('Failed to apply promo code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemove = () => {
+    setCode('');
+    setError(null);
+    setSuccess(false);
+    onRemove?.();
+  };
+
+  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.label}>Promo Code</Text>
+      
+      {appliedCode ? (
+        <View style={styles.appliedContainer}>
+          <View style={styles.appliedCodeContainer}>
+            <Text style={styles.appliedCodeLabel}>Applied:</Text>
+            <Text style={styles.appliedCode}>{appliedCode}</Text>
+            {discount !== undefined && (
+              <Text style={styles.discountText}>
+                -{formatCurrency(discount)}
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.removeButton}
+            onPress={handleRemove}
+          >
+            <Text style={styles.removeButtonText}>Remove</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            value={code}
+            onChangeText={setCode}
+            placeholder="Enter promo code"
+            placeholderTextColor="#9e9e9e"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            editable={!loading}
+          />
+          <TouchableOpacity
+            style={[styles.applyButton, (!code.trim() || loading) && styles.applyButtonDisabled]}
+            onPress={handleApply}
+            disabled={!code.trim() || loading}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.applyButtonText}>Apply</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {error && (
+        <Text style={styles.errorText}>{error}</Text>
+      )}
+
+      {success && !appliedCode && (
+        <Text style={styles.successText}>Promo code applied successfully!</Text>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#151515',
+    marginBottom: 8,
+  },
+  appliedContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#e8f5e9',
+    borderWidth: 1,
+    borderColor: '#4caf50',
+    borderRadius: 8,
+    padding: 12,
+  },
+  appliedCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  appliedCodeLabel: {
+    fontSize: 13,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  appliedCode: {
+    fontSize: 14,
+    color: '#1b5e20',
+    fontWeight: '700',
+  },
+  discountText: {
+    fontSize: 14,
+    color: '#2e7d32',
+    fontWeight: '700',
+  },
+  removeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    backgroundColor: '#c8e6c9',
+  },
+  removeButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1b5e20',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#151515',
+    textTransform: 'uppercase',
+  },
+  applyButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#ff9800',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  applyButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  applyButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#d32f2f',
+    marginTop: 6,
+  },
+  successText: {
+    fontSize: 12,
+    color: '#2e7d32',
+    marginTop: 6,
+  },
+});

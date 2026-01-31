@@ -4,15 +4,16 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import {
   Star,
-  Search,
   Trash2,
   Flag,
-  Eye,
+  FlagOff,
   ChefHat,
   Truck,
   User,
   MessageSquare,
   X,
+  AlertTriangle,
+  Search,
 } from 'lucide-react';
 
 interface Review {
@@ -32,9 +33,11 @@ export default function ReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [showFlagged, setShowFlagged] = useState(false);
+  const [search, setSearch] = useState('');
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     fetchReviews();
@@ -87,6 +90,28 @@ export default function ReviewsPage() {
           is_flagged: true,
           created_at: '2024-01-19T18:00:00Z',
         },
+        {
+          id: '4',
+          order_id: 'RND-2024-001237',
+          reviewer_name: 'Emily Brown',
+          reviewee_type: 'driver',
+          reviewee_name: 'Tom Wilson',
+          rating: 1,
+          comment: 'Driver was very late and food was cold. Terrible experience!',
+          is_flagged: true,
+          created_at: '2024-01-19T16:00:00Z',
+        },
+        {
+          id: '5',
+          order_id: 'RND-2024-001238',
+          reviewer_name: 'Alex Turner',
+          reviewee_type: 'chef',
+          reviewee_name: 'Soul Food by James',
+          rating: 5,
+          comment: 'Best fried chicken I have ever had! Absolutely amazing.',
+          is_flagged: false,
+          created_at: '2024-01-18T12:00:00Z',
+        },
       ]);
     } finally {
       setLoading(false);
@@ -95,6 +120,7 @@ export default function ReviewsPage() {
 
   const handleDelete = async () => {
     if (!selectedReview || !deleteReason) return;
+    setActionLoading(true);
     try {
       await api.removeReview(selectedReview.id, deleteReason);
       setShowDeleteModal(false);
@@ -103,6 +129,35 @@ export default function ReviewsPage() {
       fetchReviews();
     } catch (error) {
       console.error('Failed to delete review:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleToggleFlag = async (review: Review) => {
+    setActionLoading(true);
+    try {
+      if (review.is_flagged) {
+        await api.unflagReview(review.id);
+      } else {
+        await api.flagReview(review.id);
+      }
+      // Update local state optimistically
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.id === review.id ? { ...r, is_flagged: !r.is_flagged } : r
+        )
+      );
+    } catch (error) {
+      console.error('Failed to update flag status:', error);
+      // Optimistically update in mock mode
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.id === review.id ? { ...r, is_flagged: !r.is_flagged } : r
+        )
+      );
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -123,17 +178,29 @@ export default function ReviewsPage() {
     );
   };
 
+  // Filter reviews by search
+  const filteredReviews = reviews.filter((review) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      review.reviewer_name.toLowerCase().includes(q) ||
+      review.reviewee_name.toLowerCase().includes(q) ||
+      review.comment.toLowerCase().includes(q) ||
+      review.order_id.toLowerCase().includes(q)
+    );
+  });
+
   const avgRating =
-    reviews.length > 0
-      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+    filteredReviews.length > 0
+      ? filteredReviews.reduce((sum, r) => sum + r.rating, 0) / filteredReviews.length
       : 0;
 
   const ratingDistribution = [5, 4, 3, 2, 1].map((rating) => ({
     rating,
-    count: reviews.filter((r) => r.rating === rating).length,
+    count: filteredReviews.filter((r) => r.rating === rating).length,
     percentage:
-      reviews.length > 0
-        ? (reviews.filter((r) => r.rating === rating).length / reviews.length) *
+      filteredReviews.length > 0
+        ? (filteredReviews.filter((r) => r.rating === rating).length / filteredReviews.length) *
           100
         : 0,
   }));
@@ -145,27 +212,43 @@ export default function ReviewsPage() {
           <h1 className="text-2xl font-bold text-ink">Review Management</h1>
           <p className="text-muted text-sm">Moderate and manage user reviews</p>
         </div>
+        <div className="text-sm text-muted">
+          {filteredReviews.length} reviews
+        </div>
       </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search reviews..."
+            className="input pl-10"
+          />
+        </div>
         <select
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="input w-full sm:w-48"
+          title="Filter by review type"
+          aria-label="Filter by review type"
         >
           <option value="all">All Reviews</option>
           <option value="chef">Chef Reviews</option>
           <option value="driver">Driver Reviews</option>
         </select>
-        <label className="flex items-center gap-2 cursor-pointer">
+        <label className="flex items-center gap-2 cursor-pointer bg-white border border-gray-200 rounded-xl px-4 py-2">
           <input
             type="checkbox"
             checked={showFlagged}
             onChange={(e) => setShowFlagged(e.target.checked)}
-            className="w-4 h-4 rounded"
+            className="w-4 h-4 rounded accent-red-500"
           />
-          <span className="text-sm">Show flagged only</span>
+          <Flag className="w-4 h-4 text-red-500" />
+          <span className="text-sm">Flagged only</span>
         </label>
       </div>
 
@@ -183,7 +266,7 @@ export default function ReviewsPage() {
             <span className="text-muted">/ 5.0</span>
           </div>
           <p className="text-sm text-muted mt-2">
-            Based on {reviews.length} reviews
+            Based on {filteredReviews.length} reviews
           </p>
         </div>
 
@@ -196,7 +279,7 @@ export default function ReviewsPage() {
                 <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
                 <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-amber-400 rounded-full"
+                    className="h-full bg-amber-400 rounded-full transition-all"
                     style={{ width: `${item.percentage}%` }}
                   />
                 </div>
@@ -215,7 +298,7 @@ export default function ReviewsPage() {
                 <span className="text-sm">Chef Reviews</span>
               </div>
               <span className="font-semibold">
-                {reviews.filter((r) => r.reviewee_type === 'chef').length}
+                {filteredReviews.filter((r) => r.reviewee_type === 'chef').length}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -224,7 +307,7 @@ export default function ReviewsPage() {
                 <span className="text-sm">Driver Reviews</span>
               </div>
               <span className="font-semibold">
-                {reviews.filter((r) => r.reviewee_type === 'driver').length}
+                {filteredReviews.filter((r) => r.reviewee_type === 'driver').length}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -233,7 +316,7 @@ export default function ReviewsPage() {
                 <span className="text-sm">Flagged</span>
               </div>
               <span className="font-semibold text-red-600">
-                {reviews.filter((r) => r.is_flagged).length}
+                {filteredReviews.filter((r) => r.is_flagged).length}
               </span>
             </div>
           </div>
@@ -244,14 +327,14 @@ export default function ReviewsPage() {
       <div className="card">
         {loading ? (
           <div className="text-center py-12 text-muted">Loading...</div>
-        ) : reviews.length === 0 ? (
+        ) : filteredReviews.length === 0 ? (
           <div className="text-center py-12">
             <MessageSquare className="w-12 h-12 mx-auto text-gray-300 mb-3" />
             <p className="text-muted">No reviews found</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {reviews.map((review) => (
+            {filteredReviews.map((review) => (
               <div
                 key={review.id}
                 className={`p-4 rounded-xl border ${
@@ -271,7 +354,7 @@ export default function ReviewsPage() {
                       </p>
                       <div className="flex items-center gap-2 text-xs text-muted">
                         <span>Order: {review.order_id}</span>
-                        <span>•</span>
+                        <span>-</span>
                         <span>
                           {new Date(review.created_at).toLocaleDateString()}
                         </span>
@@ -280,12 +363,30 @@ export default function ReviewsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {review.is_flagged && (
-                      <span className="badge badge-rejected">
-                        <Flag className="w-3 h-3 mr-1" />
+                      <span className="badge badge-rejected flex items-center gap-1">
+                        <Flag className="w-3 h-3" />
                         Flagged
                       </span>
                     )}
                     <button
+                      type="button"
+                      onClick={() => handleToggleFlag(review)}
+                      disabled={actionLoading}
+                      className={`p-2 rounded-lg transition-colors ${
+                        review.is_flagged
+                          ? 'hover:bg-emerald-100 text-emerald-600'
+                          : 'hover:bg-amber-100 text-amber-600'
+                      }`}
+                      title={review.is_flagged ? 'Unflag Review' : 'Flag Review'}
+                    >
+                      {review.is_flagged ? (
+                        <FlagOff className="w-4 h-4" />
+                      ) : (
+                        <Flag className="w-4 h-4" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => {
                         setSelectedReview(review);
                         setShowDeleteModal(true);
@@ -308,6 +409,7 @@ export default function ReviewsPage() {
                     <span className="font-medium">{review.reviewee_name}</span>
                   </div>
                   {renderStars(review.rating)}
+                  <span className="text-sm text-muted">({review.rating}/5)</span>
                 </div>
 
                 <p className="text-sm text-gray-700">{review.comment}</p>
@@ -322,13 +424,22 @@ export default function ReviewsPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-ink">Remove Review</h3>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                </div>
+                <h3 className="text-lg font-bold text-ink">Remove Review</h3>
+              </div>
               <button
+                type="button"
                 onClick={() => {
                   setShowDeleteModal(false);
                   setDeleteReason('');
+                  setSelectedReview(null);
                 }}
                 className="p-1 hover:bg-gray-100 rounded-lg"
+                title="Close modal"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -348,29 +459,38 @@ export default function ReviewsPage() {
                 &ldquo;{selectedReview.comment}&rdquo;
               </p>
             </div>
-            <textarea
-              value={deleteReason}
-              onChange={(e) => setDeleteReason(e.target.value)}
-              placeholder="Reason for removal (required)..."
-              rows={3}
-              className="input mb-4"
-            />
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-ink mb-1">
+                Reason for removal
+              </label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="Enter the reason for removing this review..."
+                rows={3}
+                className="input"
+              />
+            </div>
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => {
                   setShowDeleteModal(false);
                   setDeleteReason('');
+                  setSelectedReview(null);
                 }}
                 className="flex-1 btn-secondary"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleDelete}
-                disabled={!deleteReason}
-                className="flex-1 btn-danger"
+                disabled={!deleteReason || actionLoading}
+                className="flex-1 btn-danger flex items-center justify-center gap-2"
               >
-                Remove Review
+                <Trash2 className="w-4 h-4" />
+                {actionLoading ? 'Removing...' : 'Remove Review'}
               </button>
             </div>
           </div>

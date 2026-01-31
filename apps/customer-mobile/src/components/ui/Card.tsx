@@ -19,12 +19,7 @@ export default function Card({
   variant = 'elevated',
   padding = 'medium',
 }: CardProps) {
-  const cardStyles = [
-    styles.card,
-    styles[variant],
-    styles[`padding_${padding}`],
-    style,
-  ];
+  const cardStyles = [styles.card, styles[variant], styles[`padding_${padding}`], style];
 
   if (onPress) {
     return (

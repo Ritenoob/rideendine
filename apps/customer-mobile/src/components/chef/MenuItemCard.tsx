@@ -59,9 +59,7 @@ export default function MenuItemCard({ item, onPress, onAddToCart }: MenuItemCar
           <Text style={styles.price}>{formatCurrency(item.price)}</Text>
           <Text style={styles.prepTime}>{item.preparationTime} min</Text>
         </View>
-        {!item.isAvailable && (
-          <Text style={styles.soldOut}>Sold Out</Text>
-        )}
+        {!item.isAvailable && <Text style={styles.soldOut}>Sold Out</Text>}
       </View>
       {item.imageUrl ? (
         <Image source={{ uri: item.imageUrl }} style={styles.image} />

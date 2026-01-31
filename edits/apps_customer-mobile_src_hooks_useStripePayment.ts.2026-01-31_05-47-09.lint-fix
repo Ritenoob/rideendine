@@ -1,0 +1,117 @@
+/**
+ * useStripePayment Hook - Stripe Payment Sheet Integration
+ */
+import { useState } from 'react';
+import { initPaymentSheet, presentPaymentSheet } from '@stripe/stripe-react-native';
+import { Alert } from 'react-native';
+import { api } from '@/services';
+
+interface PaymentResult {
+  success: boolean;
+  error?: string;
+}
+
+export const useStripePayment = () => {
+  const [loading, setLoading] = useState(false);
+
+  const initializePayment = async (orderId: string): Promise<boolean> => {
+    try {
+      setLoading(true);
+
+      // Get payment intent client secret
+      const paymentData = await api.createPaymentIntent(orderId);
+
+      // Get ephemeral key for customer
+      const { ephemeralKey, customerId } = await api.getEphemeralKey();
+
+      // Initialize Payment Sheet
+      const { error } = await initPaymentSheet({
+        merchantDisplayName: 'RideNDine',
+        customerId,
+        customerEphemeralKeySecret: ephemeralKey,
+        paymentIntentClientSecret: paymentData.clientSecret,
+        allowsDelayedPaymentMethods: true,
+        returnURL: 'ridendine://payment-success',
+        appearance: {
+          colors: {
+            primary: '#ff9800', // RideNDine orange
+            background: '#ffffff',
+            componentBackground: '#f5f5f5',
+            componentBorder: '#e0e0e0',
+            componentDivider: '#e0e0e0',
+            primaryText: '#000000',
+            secondaryText: '#757575',
+            componentText: '#000000',
+            placeholderText: '#9e9e9e',
+          },
+          shapes: {
+            borderRadius: 12,
+            borderWidth: 1,
+          },
+          primaryButton: {
+            colors: {
+              background: '#ff9800',
+              text: '#ffffff',
+              border: '#ff9800',
+            },
+          },
+        },
+      });
+
+      if (error) {
+        console.error('Payment Sheet init error:', error);
+        Alert.alert('Payment Error', error.message);
+        return false;
+      }
+
+      return true;
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Failed to initialize payment. Please try again.';
+      console.error('Payment initialization error:', error);
+      Alert.alert('Payment Error', message);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const processPayment = async (): Promise<PaymentResult> => {
+    try {
+      setLoading(true);
+
+      const { error } = await presentPaymentSheet();
+
+      if (error) {
+        console.error('Payment error:', error);
+
+        // Handle user cancellation gracefully (don't show error alert)
+        if (error.code === 'Canceled') {
+          return { success: false, error: 'Payment cancelled' };
+        }
+
+        // Show error alert for other errors
+        Alert.alert('Payment Failed', error.message);
+        return { success: false, error: error.message };
+      }
+
+      // Payment successful!
+      return { success: true };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Payment failed. Please try again.';
+      console.error('Payment processing error:', error);
+      Alert.alert('Payment Error', message);
+      return { success: false, error: message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return {
+    initializePayment,
+    processPayment,
+    loading,
+  };
+};

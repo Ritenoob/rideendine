@@ -80,6 +80,14 @@ class ApiClient {
     return this.request(`/admin/users/${id}/suspend`, { method: 'POST' });
   }
 
+  async activateUser(id: string) {
+    return this.request(`/admin/users/${id}/activate`, { method: 'POST' });
+  }
+
+  async getUserDetails(id: string) {
+    return this.request<{ user: any }>(`/admin/users/${id}`);
+  }
+
   // Chefs
   async getChefs(params?: { status?: string; search?: string }) {
     const query = new URLSearchParams();
@@ -174,6 +182,14 @@ class ApiClient {
     });
   }
 
+  async flagReview(id: string) {
+    return this.request(`/admin/reviews/${id}/flag`, { method: 'POST' });
+  }
+
+  async unflagReview(id: string) {
+    return this.request(`/admin/reviews/${id}/unflag`, { method: 'POST' });
+  }
+
   // Settings
   async getSettings() {
     return this.request<{ settings: any }>('/admin/settings');
@@ -183,6 +199,39 @@ class ApiClient {
     return this.request('/admin/settings', {
       method: 'PATCH',
       body: JSON.stringify(settings),
+    });
+  }
+
+  // Disputes
+  async getDisputes(params?: { status?: string; priority?: string }) {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (params?.priority) query.set('priority', params.priority);
+    return this.request<{ disputes: any[] }>(`/admin/disputes?${query}`);
+  }
+
+  async getDisputeDetails(id: string) {
+    return this.request<{ dispute: any }>(`/admin/disputes/${id}`);
+  }
+
+  async updateDisputeStatus(id: string, status: string) {
+    return this.request(`/admin/disputes/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async resolveDispute(id: string, data: { resolution: string; refund_amount?: number }) {
+    return this.request(`/admin/disputes/${id}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async addDisputeMessage(id: string, message: string) {
+    return this.request(`/admin/disputes/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
     });
   }
 }

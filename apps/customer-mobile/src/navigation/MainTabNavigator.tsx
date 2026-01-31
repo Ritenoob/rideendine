@@ -3,9 +3,8 @@
  */
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, StyleSheet } from 'react-native';
+import { Text, StyleSheet } from 'react-native';
 import { MainTabParamList } from './types';
-import { useCartStore } from '@/store';
 
 // Screens
 import HomeScreen from '@/screens/home/HomeScreen';
@@ -24,24 +23,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
     Profile: '👤',
   };
 
-  return (
-    <Text style={{ fontSize: 24, opacity: focused ? 1 : 0.5 }}>
-      {icons[name] || '•'}
-    </Text>
-  );
-}
-
-// Cart badge component
-function CartBadge() {
-  const itemCount = useCartStore((state) => state.itemCount);
-
-  if (itemCount === 0) return null;
-
-  return (
-    <View style={styles.badge}>
-      <Text style={styles.badgeText}>{itemCount > 9 ? '9+' : itemCount}</Text>
-    </View>
-  );
+  return <Text style={{ fontSize: 24, opacity: focused ? 1 : 0.5 }}>{icons[name] || '•'}</Text>;
 }
 
 export default function MainTabNavigator() {
@@ -56,26 +38,10 @@ export default function MainTabNavigator() {
         headerShown: false,
       })}
     >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{ tabBarLabel: 'Home' }}
-      />
-      <Tab.Screen
-        name="Search"
-        component={SearchScreen}
-        options={{ tabBarLabel: 'Search' }}
-      />
-      <Tab.Screen
-        name="Orders"
-        component={OrdersScreen}
-        options={{ tabBarLabel: 'Orders' }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{ tabBarLabel: 'Profile' }}
-      />
+      <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Home' }} />
+      <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarLabel: 'Search' }} />
+      <Tab.Screen name="Orders" component={OrdersScreen} options={{ tabBarLabel: 'Orders' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
 }

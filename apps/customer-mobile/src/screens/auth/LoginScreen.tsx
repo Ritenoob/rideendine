@@ -51,11 +51,10 @@ export default function LoginScreen() {
     try {
       const response = await api.login(email.trim().toLowerCase(), password);
       await setAuth(response.user, response.accessToken, response.refreshToken);
-    } catch (error: any) {
-      Alert.alert(
-        'Login Failed',
-        error.message || 'Please check your credentials and try again.'
-      );
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Please check your credentials and try again.';
+      Alert.alert('Login Failed', message);
     } finally {
       setLoading(false);
     }
@@ -71,18 +70,13 @@ export default function LoginScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
 
           <View style={styles.header}>
             <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>
-              Sign in to continue ordering delicious food
-            </Text>
+            <Text style={styles.subtitle}>Sign in to continue ordering delicious food</Text>
           </View>
 
           <View style={styles.form}>
@@ -111,19 +105,12 @@ export default function LoginScreen() {
               <Text style={styles.forgotPasswordText}>Forgot password?</Text>
             </TouchableOpacity>
 
-            <Button
-              title="Sign In"
-              onPress={handleLogin}
-              loading={loading}
-              size="large"
-            />
+            <Button title="Sign In" onPress={handleLogin} loading={loading} size="large" />
           </View>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Don't have an account? </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Register' as never)}
-            >
+            <TouchableOpacity onPress={() => navigation.navigate('Register' as never)}>
               <Text style={styles.footerLink}>Sign up</Text>
             </TouchableOpacity>
           </View>

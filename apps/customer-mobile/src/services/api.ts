@@ -1,6 +1,7 @@
 /**
  * API Service - HTTP client for RideNDine API
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useAuthStore } from '@/store';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8081';
@@ -34,10 +35,7 @@ class ApiService {
     return headers;
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
     try {
@@ -195,7 +193,7 @@ class ApiService {
     if (params?.limit) query.set('limit', params.limit.toString());
     const queryString = query.toString();
     return this.request<{ data: any[]; total: number; page: number; totalPages: number }>(
-      `/orders${queryString ? `?${queryString}` : ''}`
+      `/orders${queryString ? `?${queryString}` : ''}`,
     );
   }
 
@@ -209,6 +207,15 @@ class ApiService {
     });
   }
 
+  async getEphemeralKey() {
+    return this.request<{
+      ephemeralKey: string;
+      customerId: string;
+    }>('/payments/ephemeral-key', {
+      method: 'POST',
+    });
+  }
+
   async cancelOrder(orderId: string, reason?: string) {
     return this.request<any>(`/orders/${orderId}/cancel`, {
       method: 'PATCH',
@@ -217,9 +224,7 @@ class ApiService {
   }
 
   async getOrderEta(orderId: string) {
-    return this.request<{ etaSeconds: number; etaMinutes: number }>(
-      `/orders/${orderId}/eta`
-    );
+    return this.request<{ etaSeconds: number; etaMinutes: number }>(`/orders/${orderId}/eta`);
   }
 
   // ============ Reviews ============

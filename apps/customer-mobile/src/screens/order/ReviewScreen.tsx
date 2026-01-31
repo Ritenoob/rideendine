@@ -12,12 +12,15 @@ import {
   Alert,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@/navigation/types';
 import { Button, Card } from '@/components/ui';
 import { api } from '@/services';
 
 export default function ReviewScreen() {
-  const route = useRoute<any>();
-  const navigation = useNavigation();
+  const route = useRoute<RouteProp<RootStackParamList, 'Review'>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { orderId } = route.params;
 
   const [chefRating, setChefRating] = useState(0);
@@ -45,8 +48,9 @@ export default function ReviewScreen() {
       Alert.alert('Thank You!', 'Your review has been submitted.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to submit review.');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to submit review.';
+      Alert.alert('Error', message);
     } finally {
       setLoading(false);
     }
@@ -56,9 +60,7 @@ export default function ReviewScreen() {
     <View style={styles.starsContainer}>
       {[1, 2, 3, 4, 5].map((value) => (
         <TouchableOpacity key={value} onPress={() => onPress(value)}>
-          <Text style={[styles.star, value <= rating && styles.starActive]}>
-            ★
-          </Text>
+          <Text style={[styles.star, value <= rating && styles.starActive]}>★</Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -69,9 +71,7 @@ export default function ReviewScreen() {
       {/* Chef Review */}
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>👨‍🍳 Rate the Chef</Text>
-        <Text style={styles.cardDescription}>
-          How was the food quality and preparation?
-        </Text>
+        <Text style={styles.cardDescription}>How was the food quality and preparation?</Text>
 
         {renderStars(chefRating, setChefRating)}
 
@@ -89,9 +89,7 @@ export default function ReviewScreen() {
       {/* Driver Review */}
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>🚗 Rate the Driver</Text>
-        <Text style={styles.cardDescription}>
-          How was the delivery experience?
-        </Text>
+        <Text style={styles.cardDescription}>How was the delivery experience?</Text>
 
         {renderStars(driverRating, setDriverRating)}
 
@@ -107,12 +105,7 @@ export default function ReviewScreen() {
       </Card>
 
       {/* Submit Button */}
-      <Button
-        title="Submit Review"
-        onPress={handleSubmit}
-        loading={loading}
-        size="large"
-      />
+      <Button title="Submit Review" onPress={handleSubmit} loading={loading} size="large" />
     </ScrollView>
   );
 }

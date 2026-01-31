@@ -1,6 +1,7 @@
 /**
  * WebSocket Service - Real-time order tracking
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useAuthStore, useOrderStore } from '@/store';
 
 const WS_URL = process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:9004';

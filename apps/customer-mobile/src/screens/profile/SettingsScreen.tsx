@@ -18,9 +18,7 @@ export default function SettingsScreen() {
           <View style={styles.settingRow}>
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>Push Notifications</Text>
-              <Text style={styles.settingDescription}>
-                Receive notifications on your device
-              </Text>
+              <Text style={styles.settingDescription}>Receive notifications on your device</Text>
             </View>
             <Switch
               value={pushNotifications}
@@ -32,9 +30,7 @@ export default function SettingsScreen() {
           <View style={styles.settingRow}>
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>Email Notifications</Text>
-              <Text style={styles.settingDescription}>
-                Receive updates via email
-              </Text>
+              <Text style={styles.settingDescription}>Receive updates via email</Text>
             </View>
             <Switch
               value={emailNotifications}
@@ -46,9 +42,7 @@ export default function SettingsScreen() {
           <View style={styles.settingRow}>
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>Order Updates</Text>
-              <Text style={styles.settingDescription}>
-                Real-time order status notifications
-              </Text>
+              <Text style={styles.settingDescription}>Real-time order status notifications</Text>
             </View>
             <Switch
               value={orderUpdates}
@@ -60,9 +54,7 @@ export default function SettingsScreen() {
           <View style={styles.settingRow}>
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>Promotions & Offers</Text>
-              <Text style={styles.settingDescription}>
-                Receive special deals and discounts
-              </Text>
+              <Text style={styles.settingDescription}>Receive special deals and discounts</Text>
             </View>
             <Switch
               value={promotions}

@@ -262,4 +262,24 @@ export class StripeService {
       throw new InternalServerErrorException('Failed to process customer');
     }
   }
+
+  /**
+   * Create an ephemeral key for a customer (required for Payment Sheet)
+   */
+  async createEphemeralKey(customerId: string): Promise<Stripe.EphemeralKey> {
+    try {
+      const ephemeralKey = await this.stripe.ephemeralKeys.create(
+        { customer: customerId },
+        { apiVersion: '2026-01-28.clover' },
+      );
+
+      this.logger.log(`Created ephemeral key for customer: ${customerId}`);
+      return ephemeralKey;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to create ephemeral key: ${errorMessage}`);
+      throw new InternalServerErrorException('Failed to create ephemeral key');
+    }
+  }
 }

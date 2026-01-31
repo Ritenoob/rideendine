@@ -1,0 +1,94 @@
+/**
+ * Edit Profile Screen
+ */
+import React, { useState } from 'react';
+import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { Button, Input } from '@/components/ui';
+import { api } from '@/services';
+import { useAuthStore } from '@/store';
+
+export default function EditProfileScreen() {
+  const navigation = useNavigation();
+  const { user, updateUser } = useAuthStore();
+
+  const [firstName, setFirstName] = useState(user?.firstName || '');
+  const [lastName, setLastName] = useState(user?.lastName || '');
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [loading, setLoading] = useState(false);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const updatedUser = await api.updateProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phone.trim(),
+      });
+      updateUser(updatedUser);
+      Alert.alert('Success', 'Profile updated successfully');
+      navigation.goBack();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Input
+        label="First Name"
+        value={firstName}
+        onChangeText={setFirstName}
+        autoCapitalize="words"
+      />
+
+      <Input
+        label="Last Name"
+        value={lastName}
+        onChangeText={setLastName}
+        autoCapitalize="words"
+      />
+
+      <Input
+        label="Email"
+        value={user?.email || ''}
+        editable={false}
+        containerStyle={styles.disabledInput}
+      />
+
+      <Input
+        label="Phone"
+        value={phone}
+        onChangeText={setPhone}
+        keyboardType="phone-pad"
+      />
+
+      <View style={styles.buttonContainer}>
+        <Button
+          title="Save Changes"
+          onPress={handleSave}
+          loading={loading}
+          size="large"
+        />
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f7f4ee',
+  },
+  content: {
+    padding: 16,
+  },
+  disabledInput: {
+    opacity: 0.6,
+  },
+  buttonContainer: {
+    marginTop: 24,
+  },
+});

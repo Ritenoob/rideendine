@@ -1,0 +1,15 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/dashboard/chefs/page": "/dashboard/chefs",
+  "/dashboard/commission/page": "/dashboard/commission",
+  "/dashboard/disputes/page": "/dashboard/disputes",
+  "/dashboard/drivers/page": "/dashboard/drivers",
+  "/dashboard/orders/page": "/dashboard/orders",
+  "/dashboard/page": "/dashboard",
+  "/dashboard/reviews/page": "/dashboard/reviews",
+  "/dashboard/settings/page": "/dashboard/settings",
+  "/dashboard/users/page": "/dashboard/users",
+  "/login/page": "/login",
+  "/page": "/"
+}

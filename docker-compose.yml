@@ -15,6 +15,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
       - ./database/migrations:/docker-entrypoint-initdb.d/migrations
+      - ./backups:/backups
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ridendine"]
       interval: 10s
@@ -179,12 +180,56 @@ services:
     networks:
       - ridendine_network
 
+  # Prometheus (Metrics Collection)
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: ridendine_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - ridendine_network
+
+  # Grafana (Metrics Visualization)
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: ridendine_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=ridendine_admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - ridendine_network
+
 volumes:
   postgres_data:
     driver: local
   redis_data:
     driver: local
   api_uploads:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
     driver: local
 
 networks:

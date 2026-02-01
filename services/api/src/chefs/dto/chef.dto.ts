@@ -12,6 +12,30 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+// Define dependent classes first
+export class DayScheduleDto {
+  @IsBoolean()
+  isOpen!: boolean;
+
+  @IsOptional()
+  @IsString()
+  openTime?: string; // "09:00"
+
+  @IsOptional()
+  @IsString()
+  closeTime?: string; // "21:00"
+}
+
+export class OperatingHoursDto {
+  monday?: DayScheduleDto;
+  tuesday?: DayScheduleDto;
+  wednesday?: DayScheduleDto;
+  thursday?: DayScheduleDto;
+  friday?: DayScheduleDto;
+  saturday?: DayScheduleDto;
+  sunday?: DayScheduleDto;
+}
+
 export class ApplyAsChefDto {
   @IsString()
   @MaxLength(255)
@@ -35,7 +59,7 @@ export class ApplyAsChefDto {
   longitude!: number;
 
   @IsArray()
-  @IsString({ each: true })
+  @IsString({ each: true})
   cuisineTypes!: string[];
 
   @IsOptional()
@@ -52,29 +76,6 @@ export class ApplyAsChefDto {
   @IsOptional()
   @IsObject()
   operatingHours?: OperatingHoursDto;
-}
-
-export class OperatingHoursDto {
-  monday?: DayScheduleDto;
-  tuesday?: DayScheduleDto;
-  wednesday?: DayScheduleDto;
-  thursday?: DayScheduleDto;
-  friday?: DayScheduleDto;
-  saturday?: DayScheduleDto;
-  sunday?: DayScheduleDto;
-}
-
-export class DayScheduleDto {
-  @IsBoolean()
-  isOpen!: boolean;
-
-  @IsOptional()
-  @IsString()
-  openTime?: string; // "09:00"
-
-  @IsOptional()
-  @IsString()
-  closeTime?: string; // "21:00"
 }
 
 export class UpdateChefDto {

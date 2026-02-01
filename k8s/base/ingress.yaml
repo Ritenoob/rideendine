@@ -1,0 +1,120 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ridendine-ingress
+  namespace: ridendine
+  annotations:
+    # nginx ingress controller
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+
+    # CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+
+    # WebSocket support for realtime service
+    nginx.ingress.kubernetes.io/websocket-services: "realtime"
+
+    # SSL certificate (cert-manager)
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+    # Timeouts
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+
+spec:
+  ingressClassName: nginx
+
+  tls:
+  - hosts:
+    - api.ridendine.com
+    - ws.ridendine.com
+    secretName: ridendine-tls
+
+  rules:
+  # API Service
+  - host: api.ridendine.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api
+            port:
+              number: 9001
+
+  # WebSocket/Realtime Service
+  - host: ws.ridendine.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: realtime
+            port:
+              number: 9004
+
+---
+# Alternative: Single domain with path-based routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ridendine-ingress-single-domain
+  namespace: ridendine
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - ridendine.com
+    secretName: ridendine-tls
+  rules:
+  - host: ridendine.com
+    http:
+      paths:
+      # API routes
+      - path: /api(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: api
+            port:
+              number: 9001
+
+      # WebSocket routes
+      - path: /ws(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: realtime
+            port:
+              number: 9004
+
+      # Dispatch service (internal, could be excluded from ingress)
+      - path: /dispatch(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: dispatch
+            port:
+              number: 9002
+
+      # Routing service (internal, could be excluded from ingress)
+      - path: /routing(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: routing
+            port:
+              number: 9003

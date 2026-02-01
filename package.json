@@ -33,6 +33,8 @@
     "db:migrate:docker": "docker-compose exec postgres /docker-entrypoint-initdb.d/02-run-migrations.sh",
     "db:seed": "psql postgresql://ridendine:ridendine_dev_password@localhost:5432/ridendine_dev -f database/seeds/001_test_users.sql",
     "db:reset": "npm run db:down && npm run db:up && sleep 10 && npm run db:migrate && npm run db:seed",
+    "db:backup": "bash database/scripts/backup.sh",
+    "db:restore": "bash database/scripts/restore.sh",
     "create-admin": "ts-node scripts/create-admin.ts",
     "prepare": "husky install"
   },

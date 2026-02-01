@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>RideNDine Customer App (Web)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <style>
+    body { margin:0; font-family: Arial; }
+    #map { height:100vh; }
+    .panel {
+      position:absolute;
+      top:15px; left:15px;
+      background:white;
+      padding:14px;
+      border-radius:12px;
+      width:340px;
+      z-index:999;
+      box-shadow:0 0 12px rgba(0,0,0,0.35);
+    }
+    .small { font-size:13px; color:#333; }
+    button, input { width:100%; padding:10px; margin-top:8px; border-radius:8px; border:1px solid #ccc; }
+    button { background:#ff9800; border:none; font-weight:bold; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h3>RideNDine Customer</h3>
+    <div class="small">Track your driver in real time.</div>
+
+    <label class="small" style="display:block;margin-top:8px;">Server URL</label>
+    <input id="server-url" value="http://localhost:8081" />
+
+    <label class="small" style="display:block;margin-top:8px;">Order ID</label>
+    <input id="order-id" placeholder="Paste orderId" />
+
+    <button onclick="startTracking()">Start Tracking</button>
+
+    <div class="small" id="status" style="margin-top:8px;"></div>
+    <div class="small" id="eta" style="margin-top:6px;"></div>
+    <div class="small" id="order-status" style="margin-top:6px;"></div>
+  </div>
+
+  <div id="map"></div>
+
+<script>
+const map = L.map("map").setView([43.2207, -79.7651], 12);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors"
+}).addTo(map);
+
+let socket = null;
+let driverMarker = null;
+let customerMarker = null;
+
+async function startTracking() {
+  const base = document.getElementById("server-url").value.trim();
+  const orderId = document.getElementById("order-id").value.trim();
+  if (!base || !orderId) return;
+
+  document.getElementById("status").textContent = "Connecting...";
+
+  // Authenticate as customer scoped to order
+  const authRes = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role: "customer", orderId })
+  });
+  const auth = await authRes.json();
+  if (!auth.token) {
+    document.getElementById("status").textContent = "Auth failed";
+    return;
+  }
+
+  const wsUrl = base.replace(/^http/, "ws") + `/?token=${auth.token}`;
+  socket = new WebSocket(wsUrl);
+
+  socket.onopen = () => {
+    document.getElementById("status").textContent = "Connected";
+  };
+
+  socket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.type === "init") {
+      renderInit(message.data, orderId);
+    }
+    if (message.type === "locations") {
+      updateLive(message.data);
+    }
+  };
+
+  socket.onerror = () => {
+    document.getElementById("status").textContent = "Connection error";
+  };
+}
+
+function renderInit(data, orderId) {
+  const order = data.orders.find(o => o.id === orderId);
+  if (!order) return;
+
+  const customer = data.customers.find(c => c.id === order.customerId);
+  const driver = data.drivers.find(d => d.id === order.driverId);
+
+  if (customer) {
+    if (customerMarker) map.removeLayer(customerMarker);
+    customerMarker = L.circleMarker([customer.lat, customer.lng], {
+      radius:7, color:"#1565c0", fillColor:"#1565c0", fillOpacity:0.9
+    }).addTo(map);
+  }
+
+  if (driver) {
+    if (driverMarker) map.removeLayer(driverMarker);
+    driverMarker = L.circleMarker([driver.lat, driver.lng], {
+      radius:9, color:"#fb8c00", fillColor:"#fb8c00", fillOpacity:1
+    }).addTo(map);
+  }
+
+  document.getElementById("order-status").textContent = `Status: ${order.status || "unknown"}`;
+}
+
+function updateLive(data) {
+  if (data.drivers && data.drivers.length && driverMarker) {
+    const d = data.drivers[0];
+    driverMarker.setLatLng([d.lat, d.lng]);
+  }
+  if (data.orders && data.orders.length) {
+    document.getElementById("order-status").textContent = `Status: ${data.orders[0].status}`;
+  }
+}
+</script>
+</body>
+</html>

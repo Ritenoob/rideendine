@@ -1,6 +1,33 @@
-# Dockerfile for RideNDine Dispatch Service
+# Multi-stage Dockerfile for RideNDine Dispatch Service
 
-FROM node:20-alpine
+# Build stage
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# If build step needed (uncomment if TypeScript)
+# RUN npm run build
+
+# Remove dev dependencies
+RUN npm prune --production
+
+# Runtime stage
+FROM node:20-alpine AS runtime
+
+# Add image metadata
+LABEL maintainer="RideNDine DevOps <devops@ridendine.com>" \
+      version="1.0.0" \
+      description="RideNDine Dispatch Service - Driver assignment and batching logic" \
+      service="dispatch"
 
 # Install curl for healthcheck
 RUN apk add --no-cache curl
@@ -12,11 +39,9 @@ RUN addgroup -g 1001 -S nodejs && \
 # Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --only=production
+# Copy package files and production dependencies
+COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 
 # Copy application files
 COPY --chown=nodejs:nodejs . .

@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import * as bodyParser from 'body-parser';
 import helmet from 'helmet';
@@ -92,9 +93,77 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
 
+  // Swagger/OpenAPI Configuration
+  const config = new DocumentBuilder()
+    .setTitle('RideNDine API')
+    .setDescription(
+      'Multi-role delivery platform connecting customers, home chefs, and drivers. ' +
+      'This API provides endpoints for authentication, order management, real-time tracking, ' +
+      'payment processing, and more.',
+    )
+    .setVersion('1.0.0')
+    .setContact(
+      'RideNDine Support',
+      'https://ridendine.com',
+      'support@ridendine.com',
+    )
+    .setLicense('MIT', 'https://opensource.org/licenses/MIT')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth',
+    )
+    .addServer('http://localhost:9001', 'Development Server')
+    .addServer('https://api.ridendine.com', 'Production Server')
+    .addTag('auth', 'Authentication endpoints')
+    .addTag('users', 'User management')
+    .addTag('orders', 'Order management and lifecycle')
+    .addTag('chefs', 'Chef profiles and operations')
+    .addTag('menus', 'Menu and menu item management')
+    .addTag('drivers', 'Driver management and tracking')
+    .addTag('dispatch', 'Order assignment and dispatch')
+    .addTag('payments', 'Payment processing')
+    .addTag('webhooks', 'Webhook handlers')
+    .addTag('reviews', 'Reviews and ratings')
+    .addTag('notifications', 'Push notifications')
+    .addTag('admin', 'Admin operations')
+    .addTag('health', 'Health checks and monitoring')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document, {
+    customSiteTitle: 'RideNDine API Documentation',
+    customfavIcon: 'https://ridendine.com/favicon.ico',
+    customCss: `
+      .swagger-ui .topbar { display: none }
+      .swagger-ui .info { margin: 50px 0; }
+      .swagger-ui .info .title { font-size: 36px; }
+    `,
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
+      filter: true,
+      tryItOutEnabled: true,
+    },
+  });
+
+  // Serve OpenAPI spec as JSON
+  const specPath = '/api/spec.json';
+  app.getHttpAdapter().get(specPath, (_req, res) => {
+    res.json(document);
+  });
+
   const port = process.env.API_PORT || 9001;
   await app.listen(port, '0.0.0.0');
   console.log(`🚀 API Service running on http://localhost:${port}`);
+  console.log(`📚 API Documentation available at http://localhost:${port}/api/docs`);
+  console.log(`📄 OpenAPI Spec available at http://localhost:${port}${specPath}`);
 }
 
 bootstrap();

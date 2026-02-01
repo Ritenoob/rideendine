@@ -78,6 +78,8 @@ npm run db:up                   # Start Postgres + Redis containers
 npm run db:down                 # Stop database containers
 npm run db:migrate              # Apply all SQL migrations (local)
 npm run db:migrate:docker       # Run migrations in Docker container
+npm run db:backup               # Create timestamped database backup
+npm run db:restore              # Restore database from backup
 npm run db:seed                 # Seed test data
 npm run db:reset                # Full reset: down, up, migrate, seed
 ```
@@ -158,6 +160,8 @@ Modular architecture with feature-based directories:
 | 5432 | PostgreSQL              |
 | 6379 | Redis                   |
 | 8080 | Adminer (DB UI)         |
+| 9090 | Prometheus (Metrics)    |
+| 3000 | Grafana (Monitoring)    |
 
 ## File Edit Convention
 
@@ -200,16 +204,23 @@ Key variables (see `.env.example` for full list):
 
 - [docs/API_INTEGRATION_GUIDE.md](docs/API_INTEGRATION_GUIDE.md) - Complete API integration guide (900+ lines, 25+ examples)
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - Deployment procedures for all environments (1000+ lines)
+- [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) - Alternative deployment guide
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - 30+ common issues with solutions (700+ lines)
 - [docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md) - Quick reference for developers
 
 **Operational Runbooks:**
 
-- [docs/RUNBOOK_SERVICE_RESTART.md](docs/RUNBOOK_SERVICE_RESTART.md) - Graceful service restart procedures
-- [docs/RUNBOOK_DATABASE_RECOVERY.md](docs/RUNBOOK_DATABASE_RECOVERY.md) - Database disaster recovery
-- [docs/RUNBOOK_PERFORMANCE_DEGRADATION.md](docs/RUNBOOK_PERFORMANCE_DEGRADATION.md) - Performance troubleshooting
-- [docs/RUNBOOK_SCALING.md](docs/RUNBOOK_SCALING.md) - Horizontal and vertical scaling
-- [docs/RUNBOOK_EMERGENCY_PROCEDURES.md](docs/RUNBOOK_EMERGENCY_PROCEDURES.md) - Critical incident response
+- [docs/runbooks/RUNBOOK_RESTART_SERVICES.md](docs/runbooks/RUNBOOK_RESTART_SERVICES.md) - Graceful service restart procedures
+- [docs/runbooks/RUNBOOK_DATABASE_RECOVERY.md](docs/runbooks/RUNBOOK_DATABASE_RECOVERY.md) - Database disaster recovery
+- [docs/runbooks/RUNBOOK_SCALING.md](docs/runbooks/RUNBOOK_SCALING.md) - Horizontal and vertical scaling
+
+**Infrastructure & DevOps (Week 2):**
+
+- [k8s/README.md](k8s/README.md) - Kubernetes deployment guide with full manifests
+- [secrets/README.md](secrets/README.md) - Secrets management for all environments
+- [load-tests/README.md](load-tests/README.md) - k6 load testing guide and baselines
+- [monitoring/prometheus.yml](monitoring/prometheus.yml) - Prometheus configuration
+- [monitoring/grafana-dashboards/](monitoring/grafana-dashboards/) - Grafana dashboards
 
 ## Testing
 
@@ -223,6 +234,45 @@ cd services/api && npm run test -- path/to/file.spec.ts
 cd services/api && npm run test:watch -- path/to/file.spec.ts
 ```
 
+## Monitoring & Observability
+
+```bash
+# Start monitoring stack with services
+npm run docker:up  # Includes Prometheus and Grafana
+
+# Access monitoring dashboards
+# Grafana: http://localhost:3000 (admin/ridendine_admin)
+# Prometheus: http://localhost:9090
+
+# Load testing with k6
+k6 run load-tests/api-health-check.js
+k6 run load-tests/api-full-scenario.js
+
+# View metrics from API
+curl http://localhost:9001/metrics
+```
+
+## Kubernetes Deployment
+
+```bash
+# Quick deploy to Kubernetes
+kubectl apply -f k8s/base/namespace.yaml
+kubectl create secret generic postgres-secret --from-literal=username=ridendine --from-literal=password=SECURE_PASSWORD -n ridendine
+kubectl apply -f k8s/base/
+
+# Scale services
+kubectl scale deployment/api --replicas=5 -n ridendine
+
+# Check status
+kubectl get pods -n ridendine
+kubectl get svc -n ridendine
+
+# View logs
+kubectl logs -f deployment/api -n ridendine
+
+# See k8s/README.md for full guide
+```
+
 ## Troubleshooting
 
 ```bash
@@ -233,11 +283,21 @@ lsof -i :8081
 kill $(lsof -t -i :8081)
 
 # Check all RideNDine ports
-lsof -i :8081 -i :9001 -i :9002 -i :9003 -i :9004
+lsof -i :8081 -i :9001 -i :9002 -i :9003 -i :9004 -i :9090 -i :3000
+
+# View Docker logs
+docker-compose logs -f api
 
 # View core server logs
 tail -f /tmp/ridendine_core.log
 
 # Get LAN IP for mobile testing
 hostname -I | awk '{print $1}'
+
+# Database backup/restore
+npm run db:backup
+npm run db:restore -- backups/ridendine_TIMESTAMP.sql
+
+# For detailed troubleshooting, see docs/TROUBLESHOOTING.md
+# For operational procedures, see docs/runbooks/
 ```

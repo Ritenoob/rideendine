@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: routing
+  namespace: ridendine
+  labels:
+    app: routing
+    component: backend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: routing
+  template:
+    metadata:
+      labels:
+        app: routing
+        component: backend
+    spec:
+      containers:
+      - name: routing
+        image: ridendine-routing:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 9003
+          name: http
+        env:
+        - name: NODE_ENV
+          value: production
+        - name: ROUTING_PORT
+          value: "9003"
+        - name: REDIS_HOST
+          value: redis
+        - name: REDIS_PORT
+          value: "6379"
+        - name: MAPBOX_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: routing-secrets
+              key: mapbox-token
+        - name: GOOGLE_MAPS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: routing-secrets
+              key: google-maps-key
+        - name: OSRM_BASE_URL
+          value: http://router.project-osrm.org
+        - name: LOG_LEVEL
+          value: info
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "300m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9003
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9003
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: routing
+  namespace: ridendine
+  labels:
+    app: routing
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9003
+    targetPort: 9003
+    name: http
+  selector:
+    app: routing

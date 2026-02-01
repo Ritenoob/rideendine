@@ -1,0 +1,43 @@
+:root {
+  --bg: #f7f4ee;
+  --panel: #ffffff;
+  --accent: #ff9800;
+  --ink: #151515;
+  --muted: #5f5f5f;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Trebuchet MS", "Verdana", sans-serif;
+  background: var(--bg);
+}
+#map { height: 100vh; }
+.panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 320px;
+  background: var(--panel);
+  padding: 14px;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  z-index: 999;
+}
+.panel h2 { margin: 0 0 8px 0; color: var(--ink); }
+.label { font-size: 12px; color: var(--muted); margin-top: 10px; }
+input, button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 6px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+}
+.small { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.status { font-size: 13px; margin-top: 6px; color: var(--ink); }

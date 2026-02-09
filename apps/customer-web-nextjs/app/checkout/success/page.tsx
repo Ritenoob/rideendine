@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'use';
+import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle, Package, MapPin } from 'lucide-react';

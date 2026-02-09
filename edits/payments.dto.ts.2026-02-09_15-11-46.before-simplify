@@ -1,0 +1,162 @@
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+  IsUUID,
+  Min,
+  Max,
+  MaxLength,
+  ArrayMinSize,
+  IsInt,
+  IsUrl,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class AddressDto {
+  @ApiProperty({ description: 'Street address', example: '123 Main St' })
+  @IsString()
+  @MaxLength(500)
+  street!: string;
+
+  @ApiProperty({ description: 'City', example: 'San Francisco' })
+  @IsString()
+  @MaxLength(100)
+  city!: string;
+
+  @ApiProperty({ description: 'State code', example: 'CA' })
+  @IsString()
+  @MaxLength(2)
+  state!: string;
+
+  @ApiProperty({ description: 'ZIP code', example: '94102' })
+  @IsString()
+  @MaxLength(10)
+  zipCode!: string;
+
+  @ApiPropertyOptional({ description: 'Latitude', example: 37.7749 })
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @ApiPropertyOptional({ description: 'Longitude', example: -122.4194 })
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
+}
+
+export class CartItemDto {
+  @ApiProperty({ description: 'Menu item ID', example: '123e4567-e89b-12d3-a456-426614174000' })
+  @IsUUID()
+  menuItemId!: string;
+
+  @ApiProperty({ description: 'Item name', example: 'Chicken Tikka Masala' })
+  @IsString()
+  @MaxLength(200)
+  name!: string;
+
+  @ApiProperty({ description: 'Quantity', example: 2, minimum: 1, maximum: 99 })
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  quantity!: number;
+
+  @ApiProperty({ description: 'Price in cents', example: 1299 })
+  @IsInt()
+  @Min(0)
+  price!: number;
+
+  @ApiPropertyOptional({ description: 'Special instructions', example: 'Extra spicy' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  specialInstructions?: string;
+}
+
+export class CreateCheckoutSessionDto {
+  @ApiProperty({
+    description: 'Chef ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsUUID()
+  chefId!: string;
+
+  @ApiProperty({
+    description: 'Cart items',
+    type: [CartItemDto],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => CartItemDto)
+  items!: CartItemDto[];
+
+  @ApiProperty({
+    description: 'Delivery address',
+    type: AddressDto,
+  })
+  @ValidateNested()
+  @Type(() => AddressDto)
+  deliveryAddress!: AddressDto;
+
+  @ApiPropertyOptional({
+    description: 'Special delivery instructions',
+    example: 'Ring doorbell, leave at door',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  deliveryInstructions?: string;
+
+  @ApiProperty({
+    description: 'Success URL to redirect after successful payment',
+    example: 'https://app.ridendine.com/order/success',
+  })
+  @IsUrl()
+  successUrl!: string;
+
+  @ApiProperty({
+    description: 'Cancel URL to redirect if payment is cancelled',
+    example: 'https://app.ridendine.com/cart',
+  })
+  @IsUrl()
+  cancelUrl!: string;
+
+  @ApiPropertyOptional({
+    description: 'Tip amount in cents',
+    example: 500,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  tipCents?: number;
+
+  @ApiPropertyOptional({
+    description: 'Promo code',
+    example: 'WELCOME10',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  promoCode?: string;
+}
+
+export class CheckoutSessionResponseDto {
+  @ApiProperty({ description: 'Stripe Checkout Session ID' })
+  sessionId!: string;
+
+  @ApiProperty({ description: 'Stripe Checkout Session URL' })
+  sessionUrl!: string;
+
+  @ApiProperty({ description: 'Order ID' })
+  orderId!: string;
+
+  @ApiProperty({ description: 'Order number' })
+  orderNumber!: string;
+}

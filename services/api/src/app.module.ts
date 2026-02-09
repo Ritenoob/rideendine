@@ -15,6 +15,7 @@ import { MenusModule } from './menus/menus.module';
 import { OrdersModule } from './orders/orders.module';
 import { AdminModule } from './admin/admin.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
@@ -45,6 +46,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     RealtimeModule,
     GeocodingModule,
     NotificationsModule,
+    IntegrationsModule,
   ],
   controllers: [HealthController],
   providers: [

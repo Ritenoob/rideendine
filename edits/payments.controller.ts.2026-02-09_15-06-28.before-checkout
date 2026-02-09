@@ -1,38 +1,16 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Delete,
-  Body,
-  Param,
-  UseGuards,
-  BadRequestException,
-  Inject,
-  forwardRef,
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Post, Get, Delete, Body, Param, UseGuards, BadRequestException } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { UsersService } from '../users/users.service';
-import { OrdersService } from '../orders/orders.service';
-import { ChefsService } from '../chefs/chefs.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtPayload } from '../common/interfaces/user.interface';
-import { CreateCheckoutSessionDto, CheckoutSessionResponseDto } from './dto/payments.dto';
-import { CommissionCalculator } from '../orders/commission-calculator';
 
-@ApiTags('payments')
 @Controller('payments')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth('JWT-auth')
 export class PaymentsController {
   constructor(
     private readonly stripeService: StripeService,
     private readonly usersService: UsersService,
-    @Inject(forwardRef(() => OrdersService))
-    private readonly ordersService: OrdersService,
-    @Inject(forwardRef(() => ChefsService))
-    private readonly chefsService: ChefsService,
   ) {}
 
   @Post('ephemeral-key')
@@ -146,102 +124,5 @@ export class PaymentsController {
     await this.stripeService.detachPaymentMethod(paymentMethodId);
 
     return { success: true };
-  }
-
-  @Post('create-checkout-session')
-  @ApiOperation({
-    summary: 'Create a Stripe Checkout Session',
-    description: 'Create a Stripe Checkout Session for order payment',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Checkout session created successfully',
-    type: CheckoutSessionResponseDto,
-  })
-  @ApiResponse({ status: 400, description: 'Invalid request data' })
-  @ApiResponse({ status: 404, description: 'Chef not found' })
-  async createCheckoutSession(
-    @Body() dto: CreateCheckoutSessionDto,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<CheckoutSessionResponseDto> {
-    // 1. Validate chef exists and has Stripe account
-    const chef = await this.chefsService.getChefById(dto.chefId);
-    if (!chef) {
-      throw new BadRequestException('Chef not found');
-    }
-
-    if (!chef.stripeAccountId || !chef.stripeOnboardingComplete) {
-      throw new BadRequestException('Chef has not completed payment setup');
-    }
-
-    // 2. Get user profile
-    const userProfile = await this.usersService.getProfile(user.sub);
-
-    // 3. Calculate order totals
-    const subtotalCents = dto.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0,
-    );
-
-    const commission = CommissionCalculator.calculate(subtotalCents);
-
-    // Add tip if provided
-    const totalWithTip = commission.totalCents + (dto.tipCents || 0);
-
-    // 4. Create order in database with PENDING status
-    const deliveryAddressString = `${dto.deliveryAddress.street}, ${dto.deliveryAddress.city}, ${dto.deliveryAddress.state} ${dto.deliveryAddress.zipCode}`;
-
-    const order = await this.ordersService.createOrderForCheckout({
-      customerId: user.sub,
-      chefId: dto.chefId,
-      items: dto.items.map((item) => ({
-        menuItemId: item.menuItemId,
-        quantity: item.quantity,
-        notes: item.specialInstructions,
-      })),
-      deliveryAddress: deliveryAddressString,
-      deliveryLatitude: dto.deliveryAddress.latitude || 0,
-      deliveryLongitude: dto.deliveryAddress.longitude || 0,
-      deliveryInstructions: dto.deliveryInstructions,
-      subtotalCents,
-      taxCents: commission.taxCents,
-      deliveryFeeCents: commission.deliveryFeeCents,
-      platformFeeCents: commission.platformFeeCents,
-      totalCents: totalWithTip,
-      tipCents: dto.tipCents,
-    });
-
-    // 5. Create Stripe Checkout Session
-    const session = await this.stripeService.createCheckoutSession({
-      items: dto.items.map((item) => ({
-        menuItemId: item.menuItemId,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-      })),
-      chefId: dto.chefId,
-      customerEmail: userProfile.email,
-      deliveryAddress: dto.deliveryAddress,
-      successUrl: dto.successUrl,
-      cancelUrl: dto.cancelUrl,
-      orderId: order.id,
-      orderNumber: order.orderNumber,
-      subtotalCents,
-      taxCents: commission.taxCents,
-      deliveryFeeCents: commission.deliveryFeeCents,
-      totalCents: totalWithTip,
-      applicationFeeCents: commission.platformFeeCents,
-      chefStripeAccountId: chef.stripeAccountId,
-    });
-
-    // 6. Update order with session ID
-    await this.ordersService.updateCheckoutSession(order.id, session.sessionId);
-
-    return {
-      sessionId: session.sessionId,
-      sessionUrl: session.sessionUrl,
-      orderId: order.id,
-      orderNumber: order.orderNumber,
-    };
   }
 }

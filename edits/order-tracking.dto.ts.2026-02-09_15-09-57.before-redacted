@@ -1,23 +1,4 @@
-/**
- * PUBLIC order tracking DTO - REDACTED for customer-facing tracking
- * NO sensitive location data or addresses exposed
- */
-export class OrderTrackingDto {
-  orderId!: string;
-  orderNumber!: string;
-  status!: string;
-  etaMinutes?: number;
-  estimatedDeliveryTime?: Date;
-  driverStatus?: string;
-  pickupLabel!: string;
-  createdAt!: Date;
-}
-
-/**
- * INTERNAL full tracking DTO - FOR AUTHENTICATED USERS ONLY
- * Contains full location and contact details
- */
-export interface OrderTrackingFullDto {
+export interface OrderTrackingDto {
   orderId: string;
   orderNumber: string;
   status: string;

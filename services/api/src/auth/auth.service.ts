@@ -89,6 +89,44 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
 
+    // DEMO MODE: Bypass authentication if enabled
+    const isDemoMode = process.env.DEMO_MODE === 'true';
+    if (isDemoMode) {
+      // Extract role from email prefix (chef@, driver@, admin@, or default to customer)
+      let role = 'customer';
+      if (email.startsWith('chef@')) role = 'chef';
+      else if (email.startsWith('driver@')) role = 'driver';
+      else if (email.startsWith('admin@')) role = 'admin';
+
+      const demoUser = {
+        id: `demo-${role}-${Date.now()}`,
+        email: email,
+        role: role,
+        is_verified: true,
+        first_name: 'Demo',
+        last_name: role.charAt(0).toUpperCase() + role.slice(1),
+        phone: '+1234567890',
+        avatar_url: null,
+      };
+
+      const tokens = await this.generateTokens(demoUser as any);
+      return {
+        ...tokens,
+        user: {
+          id: demoUser.id,
+          email: demoUser.email,
+          role: demoUser.role,
+          isVerified: demoUser.is_verified,
+          profile: {
+            firstName: demoUser.first_name,
+            lastName: demoUser.last_name,
+            phone: demoUser.phone,
+            avatarUrl: demoUser.avatar_url,
+          },
+        },
+      };
+    }
+
     // Get user with profile
     const result = await this.db.query(
       `SELECT u.*, p.first_name, p.last_name, p.phone, p.avatar_url
@@ -256,6 +294,38 @@ export class AuthService {
       refreshToken,
     ]);
     return { message: 'Logged out successfully' };
+  }
+
+  async getSession(userId: string) {
+    // Get user with profile
+    const result = await this.db.query(
+      `SELECT u.*, p.first_name, p.last_name, p.phone, p.avatar_url
+       FROM users u
+       LEFT JOIN user_profiles p ON u.id = p.user_id
+       WHERE u.id = $1`,
+      [userId],
+    );
+
+    if (result.rows.length === 0) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const user = result.rows[0];
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isVerified: user.is_verified,
+        profile: {
+          firstName: user.first_name,
+          lastName: user.last_name,
+          phone: user.phone,
+          avatarUrl: user.avatar_url,
+        },
+      },
+    };
   }
 
   private async sendVerificationEmail(email: string, token: string) {

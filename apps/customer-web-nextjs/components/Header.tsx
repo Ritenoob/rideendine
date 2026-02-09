@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { ShoppingCart, User, LogOut, Home, Package } from 'lucide-react';
+import { ShoppingCart, User, LogOut, Home, Package, ChefHat } from 'lucide-react';
 import { useAuthStore, useCartStore } from '@/stores';
 
 export function Header() {
@@ -23,21 +23,33 @@ export function Header() {
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <Link href="/home" className="flex items-center">
+          <Link href="/" className="flex items-center">
             <h1 className="text-2xl font-bold text-primary-600">RideNDine</h1>
           </Link>
 
           <nav className="flex items-center gap-6">
             <Link
-              href="/home"
+              href="/customer"
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
-                isActive('/home')
+                isActive('/customer')
                   ? 'bg-primary-50 text-primary-600'
                   : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
               <Home size={20} />
-              <span className="hidden sm:inline">Home</span>
+              <span className="hidden sm:inline">Browse</span>
+            </Link>
+
+            <Link
+              href="/chefs"
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+                isActive('/chefs')
+                  ? 'bg-primary-50 text-primary-600'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <ChefHat size={20} />
+              <span className="hidden sm:inline">Chefs</span>
             </Link>
 
             <Link

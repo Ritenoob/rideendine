@@ -10,10 +10,11 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { IntegrationsService } from './integrations.service';
-import { CoocoWebhookDto, MealbridgeDispatchDto } from './dto/integrations.dto';
+import { CoocoWebhookDto } from './dto/integrations.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { UserRole } from '../common/interfaces/user.interface';
 
 @ApiTags('integrations')
 @Controller('integrations')
@@ -44,7 +45,7 @@ export class IntegrationsController {
 
   @Post('mealbridge/dispatch')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin', 'chef')
+  @Roles(UserRole.ADMIN, UserRole.CHEF)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -68,7 +69,7 @@ export class IntegrationsController {
 
   @Get('events')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get integration events (admin only)',

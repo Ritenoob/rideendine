@@ -4,15 +4,15 @@ import { IsString, IsNumber, IsObject, IsOptional, IsArray } from 'class-validat
 export class CoocoOrderItemDto {
   @ApiProperty({ description: 'Item name' })
   @IsString()
-  name: string;
+  name!: string;
 
   @ApiProperty({ description: 'Quantity' })
   @IsNumber()
-  quantity: number;
+  quantity!: number;
 
   @ApiProperty({ description: 'Price per unit in cents' })
   @IsNumber()
-  priceInCents: number;
+  priceInCents!: number;
 
   @ApiProperty({ description: 'Special instructions', required: false })
   @IsString()
@@ -23,15 +23,15 @@ export class CoocoOrderItemDto {
 export class CoocoWebhookDto {
   @ApiProperty({ description: 'Cooco order ID' })
   @IsString()
-  coocoOrderId: string;
+  coocoOrderId!: string;
 
   @ApiProperty({ description: 'Chef/restaurant ID' })
   @IsString()
-  chefId: string;
+  chefId!: string;
 
   @ApiProperty({ description: 'Customer email' })
   @IsString()
-  customerEmail: string;
+  customerEmail!: string;
 
   @ApiProperty({ description: 'Customer phone', required: false })
   @IsString()
@@ -40,7 +40,7 @@ export class CoocoWebhookDto {
 
   @ApiProperty({ description: 'Delivery address object' })
   @IsObject()
-  deliveryAddress: {
+  deliveryAddress!: {
     street: string;
     city: string;
     state: string;
@@ -51,23 +51,23 @@ export class CoocoWebhookDto {
 
   @ApiProperty({ description: 'Order items', type: [CoocoOrderItemDto] })
   @IsArray()
-  items: CoocoOrderItemDto[];
+  items!: CoocoOrderItemDto[];
 
   @ApiProperty({ description: 'Subtotal in cents' })
   @IsNumber()
-  subtotalInCents: number;
+  subtotalInCents!: number;
 
   @ApiProperty({ description: 'Tax in cents' })
   @IsNumber()
-  taxInCents: number;
+  taxInCents!: number;
 
   @ApiProperty({ description: 'Delivery fee in cents' })
   @IsNumber()
-  deliveryFeeInCents: number;
+  deliveryFeeInCents!: number;
 
   @ApiProperty({ description: 'Total in cents' })
   @IsNumber()
-  totalInCents: number;
+  totalInCents!: number;
 
   @ApiProperty({ description: 'Scheduled delivery time (ISO 8601)', required: false })
   @IsString()
@@ -76,17 +76,17 @@ export class CoocoWebhookDto {
 
   @ApiProperty({ description: 'Webhook signature for verification' })
   @IsString()
-  signature: string;
+  signature!: string;
 }
 
 export class MealbridgeDispatchDto {
   @ApiProperty({ description: 'RideNDine order ID' })
   @IsString()
-  orderId: string;
+  orderId!: string;
 
   @ApiProperty({ description: 'Pickup location (chef address)' })
   @IsObject()
-  pickupLocation: {
+  pickupLocation!: {
     name: string;
     street: string;
     city: string;
@@ -99,7 +99,7 @@ export class MealbridgeDispatchDto {
 
   @ApiProperty({ description: 'Delivery location (customer address)' })
   @IsObject()
-  deliveryLocation: {
+  deliveryLocation!: {
     name: string;
     street: string;
     city: string;
@@ -112,11 +112,11 @@ export class MealbridgeDispatchDto {
 
   @ApiProperty({ description: 'Delivery window start time (ISO 8601)' })
   @IsString()
-  deliveryWindowStart: string;
+  deliveryWindowStart!: string;
 
   @ApiProperty({ description: 'Delivery window end time (ISO 8601)' })
   @IsString()
-  deliveryWindowEnd: string;
+  deliveryWindowEnd!: string;
 
   @ApiProperty({ description: 'Special delivery instructions', required: false })
   @IsString()

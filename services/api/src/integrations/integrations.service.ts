@@ -71,7 +71,7 @@ export class IntegrationsService {
 
       // Trigger Mealbridge dispatch (async - don't block webhook response)
       this.dispatchToMealbridge(orderId).catch((error) => {
-        this.logger.error(`Failed to dispatch order ${orderId} to Mealbridge: ${error.message}`);
+        this.logger.error(`Failed to dispatch order ${orderId} to Mealbridge: ${(error as Error).message}`);
       });
 
       return {
@@ -81,7 +81,7 @@ export class IntegrationsService {
       };
     } catch (error) {
       await client.query('ROLLBACK');
-      this.logger.error(`Cooco order processing failed: ${error.message}`);
+      this.logger.error(`Cooco order processing failed: ${(error as Error).message}`, (error as Error).stack);
       
       // Log failed event
       await this.logIntegrationEvent({
@@ -90,7 +90,7 @@ export class IntegrationsService {
         orderId: null,
         payload: webhookData,
         status: 'failed',
-        errorMessage: error.message,
+        errorMessage: (error as Error).message,
       });
 
       throw error;
@@ -183,7 +183,7 @@ export class IntegrationsService {
         dispatchId,
       };
     } catch (error) {
-      this.logger.error(`Mealbridge dispatch failed: ${error.message}`);
+      this.logger.error(`Mealbridge dispatch failed: ${(error as Error).message}`, (error as Error).stack);
 
       // Log failed dispatch
       await this.logIntegrationEvent({
@@ -192,7 +192,7 @@ export class IntegrationsService {
         orderId,
         payload: dispatchPayload,
         status: 'failed',
-        errorMessage: error.message,
+        errorMessage: (error as Error).message,
       });
 
       throw error;
@@ -285,7 +285,7 @@ export class IntegrationsService {
         ],
       );
     } catch (error) {
-      this.logger.error(`Failed to log integration event: ${error.message}`);
+      this.logger.error(`Failed to log integration event: ${(error as Error).message}`, (error as Error).stack);
     }
   }
 }

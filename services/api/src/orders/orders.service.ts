@@ -16,7 +16,7 @@ import { CommissionCalculator } from './commission-calculator';
 import { StripeService } from '../stripe/stripe.service';
 import { GeocodingService } from '../geocoding/geocoding.service';
 // import { RealtimeService } from '../realtime/realtime.service';
-import { OrderTrackingDto } from './dto/order-tracking.dto';
+import { OrderTrackingDto, OrderTrackingFullDto } from './dto/order-tracking.dto';
 
 @Injectable()
 export class OrdersService {
@@ -1437,7 +1437,11 @@ export class OrdersService {
     }
   }
 
-  async getOrderTracking(orderId: string): Promise<OrderTrackingDto> {
+  /**
+   * Get FULL order tracking details (internal use - requires authentication)
+   * Returns all location data including chef address and driver coordinates
+   */
+  async getOrderTrackingFull(orderId: string): Promise<OrderTrackingFullDto> {
     const result = await this.db.query(
       `SELECT 
         o.id, o.order_number, o.status,
@@ -1724,7 +1728,7 @@ export class OrdersService {
       this.logger.log(`Checkout completed for order ${orderId}`);
     } catch (error) {
       await client.query('ROLLBACK');
-      this.logger.error(`Failed to handle checkout completion: ${error.message}`);
+      this.logger.error(`Failed to handle checkout completion: ${(error as Error).message}`, (error as Error).stack);
       throw error;
     } finally {
       client.release();

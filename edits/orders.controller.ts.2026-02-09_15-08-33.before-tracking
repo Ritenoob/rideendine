@@ -33,7 +33,6 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Public } from '../common/decorators/public.decorator';
 import { JwtPayload, UserRole } from '../common/interfaces/user.interface';
 
 @ApiTags('orders')
@@ -300,25 +299,24 @@ export class OrdersController {
   }
 
   @Get(':id/tracking')
-  @Public()
   @ApiOperation({
-    summary: 'Get public order tracking information (NO AUTH REQUIRED)',
-    description: 'Get redacted tracking information for customer-facing tracking pages. Returns order status, ETA, and driver status without revealing sensitive location data or addresses.',
+    summary: 'Get order tracking information',
+    description: 'Get real-time tracking information including driver location and ETA',
   })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid', description: 'Order UUID' })
   @ApiResponse({
     status: 200,
-    description: 'Tracking information retrieved (REDACTED - no precise locations)',
+    description: 'Tracking information retrieved',
     schema: {
       example: {
         orderId: '550e8400-e29b-41d4-a716-446655440000',
-        orderNumber: 'RND-20260131-0001',
         status: 'in_transit',
-        etaMinutes: 15,
-        driverStatus: 'Delivering your order',
-        pickupLabel: 'Local chef kitchen',
-        estimatedDeliveryTime: '2026-01-31T12:45:00.000Z',
-        createdAt: '2026-01-31T12:00:00.000Z',
+        driverLocation: {
+          lat: 40.7128,
+          lng: -74.0060,
+        },
+        eta: '2026-01-31T12:45:00.000Z',
+        estimatedMinutes: 15,
       },
     },
   })

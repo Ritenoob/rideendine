@@ -80,10 +80,6 @@ export class StripeWebhookController {
         await this.handleAccountDeauthorized(event.data.object as unknown as Stripe.Account);
         break;
 
-      case 'checkout.session.completed':
-        await this.handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
-        break;
-
       case 'payment_intent.succeeded':
         await this.handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
         break;
@@ -119,37 +115,6 @@ export class StripeWebhookController {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to deauthorize chef for account ${account.id}: ${errorMessage}`);
-      throw error;
-    }
-  }
-
-  private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session): Promise<void> {
-    this.logger.log(`Handling checkout.session.completed for: ${session.id}`);
-
-    const orderId = session.metadata?.order_id;
-    if (!orderId) {
-      this.logger.warn(`Checkout session ${session.id} has no order_id in metadata`);
-      return;
-    }
-
-    try {
-      // Update order payment status to PAID
-      const paymentIntentId =
-        typeof session.payment_intent === 'string'
-          ? session.payment_intent
-          : session.payment_intent?.id;
-
-      await this.ordersService.handleCheckoutCompleted(orderId, session.id, paymentIntentId);
-
-      // Trigger Mealbridge dispatch
-      await this.ordersService.dispatchToMealbridge(orderId);
-
-      this.logger.log(`Successfully processed checkout completion for order: ${orderId}`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Failed to process checkout completion for order ${orderId}: ${errorMessage}`,
-      );
       throw error;
     }
   }

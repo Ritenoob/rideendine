@@ -16,15 +16,24 @@ import {
   Settings,
   LogOut,
   Shield,
+  Map,
+  Navigation,
+  Zap,
+  MessageSquare,
+  FileText,
 } from 'lucide-react';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/dashboard/users', icon: Users, label: 'Users' },
+  { href: '/dashboard/users', icon: Users, label: 'Customers' },
   { href: '/dashboard/chefs', icon: ChefHat, label: 'Chefs' },
   { href: '/dashboard/drivers', icon: Truck, label: 'Drivers' },
   { href: '/dashboard/orders', icon: ShoppingBag, label: 'Orders' },
-  { href: '/dashboard/commission', icon: DollarSign, label: 'Commission' },
+  { href: '/dashboard/payouts', icon: DollarSign, label: 'Payouts' },
+  { href: '/dashboard/disputes', icon: MessageSquare, label: 'Disputes' },
+  { href: '/dashboard/live-map', icon: Map, label: 'Live Map' },
+  { href: '/dashboard/driver-simulator', icon: Navigation, label: 'Simulator' },
+  { href: '/dashboard/integrations', icon: Zap, label: 'Integrations' },
   { href: '/dashboard/reviews', icon: Star, label: 'Reviews' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];

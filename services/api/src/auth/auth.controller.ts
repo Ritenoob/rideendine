@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
@@ -159,5 +159,38 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Invalid or missing JWT token' })
   async logout(@Req() req: any, @Body() body: { refreshToken: string }) {
     return this.authService.logout(req.user.sub, body.refreshToken);
+  }
+
+  @Get('session')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get current user session',
+    description: 'Returns current authenticated user details',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Session details',
+    schema: {
+      example: {
+        user: {
+          id: '550e8400-e29b-41d4-a716-446655440000',
+          email: 'customer@example.com',
+          role: 'customer',
+          isVerified: true,
+          profile: {
+            firstName: 'John',
+            lastName: 'Doe',
+            phone: '+1234567890',
+            avatarUrl: null,
+          },
+        },
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({ description: 'Invalid or missing JWT token' })
+  async getSession(@Req() req: any) {
+    return this.authService.getSession(req.user.sub);
   }
 }

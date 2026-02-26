@@ -123,28 +123,3 @@ export class MealbridgeDispatchDto {
   @IsOptional()
   instructions?: string;
 }
-
-export class CoinbaseSignPreviewDto {
-  @ApiProperty({
-    description: 'HTTP method for canonical signature input',
-    example: 'POST',
-  })
-  @IsString()
-  method!: string;
-
-  @ApiProperty({
-    description: 'Request path for canonical signature input',
-    example: '/v1/charges',
-  })
-  @IsString()
-  path!: string;
-
-  @ApiProperty({
-    description: 'Optional JSON payload for canonical signature input',
-    required: false,
-    example: { orderId: '550e8400-e29b-41d4-a716-446655440000', amountCents: 2599 },
-  })
-  @IsOptional()
-  @IsObject()
-  body?: Record<string, unknown>;
-}

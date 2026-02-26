@@ -2,7 +2,7 @@ import { Injectable, Inject, BadRequestException, Logger } from '@nestjs/common'
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
 import axios from 'axios';
-import { CoocoWebhookDto, MealbridgeDispatchDto, CoinbaseSignPreviewDto } from './dto/integrations.dto';
+import { CoocoWebhookDto, MealbridgeDispatchDto } from './dto/integrations.dto';
 
 @Injectable()
 export class IntegrationsService {
@@ -203,7 +203,7 @@ export class IntegrationsService {
    * Get integration events (for admin dashboard)
    */
   async getIntegrationEvents(filters?: {
-    source?: 'cooco' | 'mealbridge' | 'coinbase';
+    source?: 'cooco' | 'mealbridge';
     status?: 'success' | 'failed';
     limit?: number;
     offset?: number;
@@ -236,62 +236,6 @@ export class IntegrationsService {
       total: result.rowCount,
       limit,
       offset,
-    };
-  }
-
-  /**
-   * Read Coinbase/CDP key status for the "ride" API profile.
-   */
-  getCoinbaseRideStatus() {
-    const config = this.getCoinbaseRideConfig();
-    return {
-      configured: config.configured,
-      apiName: config.apiName,
-      apiIdMasked: this.maskValue(config.apiId),
-      keyFingerprint: config.privateKey
-        ? crypto.createHash('sha256').update(config.privateKey).digest('hex').slice(0, 16)
-        : null,
-    };
-  }
-
-  /**
-   * Generate a deterministic signature preview from configured Coinbase/CDP credentials.
-   * This is an internal verification helper used by admins to confirm key wiring.
-   */
-  async createCoinbaseRideSignaturePreview(input: CoinbaseSignPreviewDto) {
-    const config = this.getCoinbaseRideConfig();
-    if (!config.configured) {
-      throw new BadRequestException(
-        'Coinbase ride API credentials are missing. Set COINBASE_RIDE_API_ID and COINBASE_RIDE_PRIVATE_KEY.',
-      );
-    }
-
-    const method = (input.method || 'GET').toUpperCase();
-    const normalizedPath = input.path.startsWith('/') ? input.path : `/${input.path}`;
-    const body = input.body ? JSON.stringify(input.body) : '';
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const canonical = `${timestamp}:${method}:${normalizedPath}:${body}`;
-    const secret = this.decodeSecret(config.privateKey);
-    const signature = crypto.createHmac('sha256', secret).update(canonical).digest('hex');
-
-    await this.logIntegrationEvent({
-      source: 'coinbase',
-      eventType: 'signature_preview',
-      orderId: null,
-      payload: {
-        apiName: config.apiName,
-        method,
-        path: normalizedPath,
-      },
-      status: 'success',
-    });
-
-    return {
-      apiName: config.apiName,
-      apiIdMasked: this.maskValue(config.apiId),
-      timestamp,
-      canonical,
-      signature,
     };
   }
 
@@ -343,37 +287,5 @@ export class IntegrationsService {
     } catch (error) {
       this.logger.error(`Failed to log integration event: ${(error as Error).message}`, (error as Error).stack);
     }
-  }
-
-  private getCoinbaseRideConfig() {
-    const apiName = process.env.COINBASE_RIDE_API_NAME || 'ride';
-    const apiId = process.env.COINBASE_RIDE_API_ID || '';
-    const privateKey = process.env.COINBASE_RIDE_PRIVATE_KEY || '';
-
-    return {
-      apiName,
-      apiId,
-      privateKey,
-      configured: Boolean(apiId && privateKey),
-    };
-  }
-
-  private decodeSecret(secret: string): Buffer {
-    const trimmed = secret.trim();
-    try {
-      const decoded = Buffer.from(trimmed, 'base64');
-      if (decoded.length > 0 && decoded.toString('base64').replace(/=+$/, '') === trimmed.replace(/=+$/, '')) {
-        return decoded;
-      }
-    } catch {
-      // fall through to utf8 bytes
-    }
-    return Buffer.from(trimmed, 'utf8');
-  }
-
-  private maskValue(value: string): string {
-    if (!value) return '';
-    if (value.length <= 8) return `${value.slice(0, 2)}***`;
-    return `${value.slice(0, 4)}...${value.slice(-4)}`;
   }
 }

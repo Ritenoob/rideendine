@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { IntegrationsService } from './integrations.service';
-import { CoocoWebhookDto, CoinbaseSignPreviewDto } from './dto/integrations.dto';
+import { CoocoWebhookDto } from './dto/integrations.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -67,56 +67,6 @@ export class IntegrationsController {
     return this.integrationsService.dispatchToMealbridge(body.orderId);
   }
 
-  @Get('coinbase/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({
-    summary: 'Get Coinbase/CDP ride key status (admin only)',
-    description: 'Returns non-sensitive status of Coinbase/CDP configuration for ride API integration.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Coinbase/CDP status',
-    schema: {
-      example: {
-        configured: true,
-        apiName: 'ride',
-        apiIdMasked: 'c795...fd7f',
-        keyFingerprint: 'b1d6f903a0cd1fab',
-      },
-    },
-  })
-  async getCoinbaseStatus() {
-    return this.integrationsService.getCoinbaseRideStatus();
-  }
-
-  @Post('coinbase/sign-preview')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({
-    summary: 'Generate Coinbase ride signature preview (admin only)',
-    description: 'Creates a deterministic signature preview to verify Coinbase key wiring.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Signature preview',
-    schema: {
-      example: {
-        apiName: 'ride',
-        apiIdMasked: 'c795...fd7f',
-        timestamp: '1700000000',
-        canonical: '1700000000:POST:/v1/charges:{\"orderId\":\"550e...\"}',
-        signature: '4ef7f58a8f0f9d4f30bbf6be2f8a5f70a239ad61d58f7a9a53e5f833709b6ef1',
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: 'Coinbase credentials not configured' })
-  async createCoinbaseSignPreview(@Body() body: CoinbaseSignPreviewDto) {
-    return this.integrationsService.createCoinbaseRideSignaturePreview(body);
-  }
-
   @Get('events')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -150,7 +100,7 @@ export class IntegrationsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
   async getIntegrationEvents(
-    @Query('source') source?: 'cooco' | 'mealbridge' | 'coinbase',
+    @Query('source') source?: 'cooco' | 'mealbridge',
     @Query('status') status?: 'success' | 'failed',
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
